@@ -97,3 +97,13 @@ nav button.active-nav{color:var(--blue);font-weight:800}
 .unguarded-row>div{flex:1}.unguarded-row b{font-size:12px}.unguarded-row small{display:block;color:var(--muted);font-size:10px;margin-top:3px;line-height:1.3}
 .unguarded-row button{border:0;border-radius:10px;padding:7px 9px;background:#eef5fa;color:#176b9f;font-size:10px;font-weight:800}
 .gps-evidence{margin-top:12px;padding:10px;border-radius:11px;background:#eef8ff;color:#4e687b;font-size:11px;line-height:1.35}
+
+
+/* v1.5 official posts + user ranks */
+.rank-progress{height:9px;background:#e4edf3;border-radius:99px;overflow:hidden;margin:14px 0 6px}
+.rank-progress>div{height:100%;background:var(--blue);border-radius:99px}
+.rank-next{display:block;color:var(--muted);font-size:10px}
+.rank-card{background:white;border-radius:18px;padding:16px;box-shadow:0 4px 14px #16354b12;margin-bottom:12px}
+.rank-row{display:flex;justify-content:space-between;gap:8px;padding:10px 0;border-top:1px solid #edf1f4;font-size:12px}
+.rank-row:first-of-type{margin-top:8px}
+.rank-row small{color:var(--muted);text-align:right;font-size:9px;max-width:48%}

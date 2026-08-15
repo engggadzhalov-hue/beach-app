@@ -41,17 +41,84 @@ function initMap(){
 function renderVerifiedLifeguardPosts(){
   lifeguardMarkers.forEach(m=>m.setMap(null));
   lifeguardMarkers=[];
-  beaches.forEach(b=>{
-    const posts=(b.lifeguard && b.lifeguard.posts)||[];
-    posts.filter(p=>p.verified && Number.isFinite(p.lat) && Number.isFinite(p.lng)).forEach((p,i)=>{
+
+  const info=new google.maps.InfoWindow();
+
+  officialLifeguardPosts
+    .filter(p=>p.verified)
+    .forEach(p=>{
       const m=new google.maps.Marker({
-        position:{lat:p.lat,lng:p.lng},map,title:`Спасителен пост ${p.number||i+1} — ${b.name}`,
-        label:{text:'🛟',fontSize:'18px'},
-        icon:{path:google.maps.SymbolPath.CIRCLE,scale:13,fillColor:'#ffffff',fillOpacity:1,strokeColor:'#168fe5',strokeWeight:2}
+        position:{lat:p.lat,lng:p.lng},
+        map,
+        title:`Спасителен пост №${p.post} — ${p.beach}`,
+        label:{text:'🛟',fontSize:'17px'},
+        icon:{
+          path:google.maps.SymbolPath.CIRCLE,
+          scale:14,
+          fillColor:'#ffffff',
+          fillOpacity:1,
+          strokeColor:'#168fe5',
+          strokeWeight:2
+        },
+        zIndex:800
+      });
+      m.addListener('click',()=>{
+        info.setContent(`
+          <div style="max-width:230px">
+            <b>🛟 Спасителен пост №${p.post}</b><br>
+            ${p.beach}<br>
+            <small>Позиция по официална схема · ${p.sourceYear}</small><br>
+            <button style="margin-top:8px;border:0;border-radius:8px;padding:7px 9px;background:#e8f3fb;font-weight:700"
+              onclick="startOfficialPostCorrection('${p.beach.replace(/'/g,"\'")}',${p.post})">
+              Сигнал за корекция
+            </button>
+          </div>`);
+        info.open(map,m);
       });
       lifeguardMarkers.push(m);
     });
+
+  officialUnguardedAnchors.forEach(z=>{
+    const m=new google.maps.Marker({
+      position:{lat:z.lat,lng:z.lng},
+      map,
+      title:`Неохраняем плаж: ${z.name}`,
+      label:{text:'!',color:'#7b4b00',fontWeight:'900',fontSize:'15px'},
+      icon:{
+        path:google.maps.SymbolPath.CIRCLE,
+        scale:13,
+        fillColor:'#ffd65a',
+        fillOpacity:1,
+        strokeColor:'#ffffff',
+        strokeWeight:3
+      },
+      zIndex:650
+    });
+    m.addListener('click',()=>{
+      info.setContent(`
+        <div style="max-width:240px">
+          <b>⚠️ Официално неохраняем плаж — 2026</b><br>
+          ${z.name}<br>
+          <small>${z.partialCoverage?'Има данни за частично сезонно водноспасително обезпечаване.':'Няма нанесена потвърдена постоянна спасителна позиция за сезон 2026.'}</small><br>
+          <button style="margin-top:8px;border:0;border-radius:8px;padding:7px 9px;background:#fff2c7;font-weight:700"
+            onclick="startCatalogCorrection('${z.name.replace(/'/g,"\'")}')">
+            Сигнал за корекция
+          </button>
+        </div>`);
+      info.open(map,m);
+    });
+    lifeguardMarkers.push(m);
   });
+}
+
+function startOfficialPostCorrection(beachName,postNo){
+  showPanel('report');
+  setTimeout(()=>{
+    const type=document.getElementById('reportType');
+    if(type){type.value='lifeguard';renderReportTypeFields();}
+    const msg=document.getElementById('reportMessage');
+    if(msg) msg.textContent=`Корекция за ${beachName}, спасителен пост №${postNo}`;
+  },30);
 }
 
 function injectSheetCloseButton(){
@@ -410,24 +477,64 @@ function submitPrototypeReport(){
  const type=document.getElementById('reportType')?.value; msg.textContent=type==='lifeguard'?'✅ Корекцията е приета. В реалната версия ще чака потвърждения преди да промени картата.':'✅ Сигналът е приет в прототипа. Следващата стъпка е да го свържем с база данни.';
 }
 
+function getRank(confirmedReports,trust){
+ const ranks=[
+   {name:'Нов наблюдател',icon:'🌱',min:0,trust:0,next:5},
+   {name:'Плажен скаут',icon:'🔎',min:5,trust:60,next:20},
+   {name:'Брегови наблюдател',icon:'🌊',min:20,trust:70,next:50},
+   {name:'Местен експерт',icon:'⭐',min:50,trust:80,next:100},
+   {name:'Доверен наблюдател',icon:'🛟',min:100,trust:90,next:null}
+ ];
+ let rank=ranks[0];
+ ranks.forEach(r=>{if(confirmedReports>=r.min && trust>=r.trust) rank=r;});
+ return rank;
+}
+
 function renderProfilePanel(){
- document.getElementById('panelTitle').textContent='Профил';
- document.getElementById('panelSubtitle').textContent='Тестов потребител';
+ document.getElementById('panelTitle').textContent='Профил и ранг';
+ document.getElementById('panelSubtitle').textContent='Рангът расте от потвърдени, не от просто изпратени сигнали';
+
+ // Prototype user state; backend will replace this.
+ const user={confirmedReports:0,submittedReports:0,confirmations:0,trust:100,points:0};
+ const rank=getRank(user.confirmedReports,user.trust);
+ const progress=rank.next?Math.min(100,(user.confirmedReports/rank.next)*100):100;
 
  document.getElementById('panelContent').innerHTML=`
    <div class="profile-card">
-     <div class="profile-avatar">👤</div>
-     <h2>Beach Explorer</h2>
-     <p>Community ниво: <b>Нов потребител</b></p>
+     <div class="profile-avatar">${rank.icon}</div>
+     <h2>${rank.name}</h2>
+     <p>Достоверност: <b>${user.trust}%</b></p>
+
+     <div class="rank-progress">
+       <div style="width:${progress}%"></div>
+     </div>
+     <small class="rank-next">${rank.next?`${user.confirmedReports} / ${rank.next} потвърдени сигнала до следващото ниво`:'Максимален community ранг'}</small>
+
      <div class="profile-stats">
-       <div><b>0</b><span>Сигнали</span></div>
-       <div><b>0</b><span>Потвърждения</span></div>
-       <div><b>100%</b><span>Доверие</span></div>
+       <div><b>${user.submittedReports}</b><span>Подадени</span></div>
+       <div><b>${user.confirmedReports}</b><span>Потвърдени</span></div>
+       <div><b>${user.points}</b><span>Точки</span></div>
      </div>
    </div>
+
+   <div class="rank-card">
+     <b>🏅 Рангове</b>
+     <div class="rank-row"><span>🌱 Нов наблюдател</span><small>старт</small></div>
+     <div class="rank-row"><span>🔎 Плажен скаут</span><small>5+ потвърдени · ≥60% доверие</small></div>
+     <div class="rank-row"><span>🌊 Брегови наблюдател</span><small>20+ · ≥70%</small></div>
+     <div class="rank-row"><span>⭐ Местен експерт</span><small>50+ · ≥80%</small></div>
+     <div class="rank-row"><span>🛟 Доверен наблюдател</span><small>100+ · ≥90%</small></div>
+   </div>
+
    <div class="info-card">
-     <b>Как ще работи профилът</b>
-     <p>По-късно тук ще има история на сигналите, точки за достоверност, любими плажове и известия.</p>
+     <b>Как се печели доверие</b>
+     <p>GPS сигнал от самия плаж, снимка, потвърждения от други хора и съвпадение с официални данни увеличават тежестта. Многократно опровергани сигнали я намаляват.</p>
+   </div>
+
+   <div class="info-card">
+     <b>Важно</b>
+     <p>Дори потребител с най-висок ранг няма сам да може да променя официален спасителен пост или официален неохраняем статус. Community корекцията ще се показва отделно, докато не бъде потвърдена.</p>
    </div>
  `;
 }
+

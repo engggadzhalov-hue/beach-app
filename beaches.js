@@ -130,3 +130,42 @@ const partialLifeguardCoverage2026={
   'Алепу':{jul:2,aug:2,sep:1,note:'Частично обезпечаване; през септември се закрива пост №2.'},
   'Резово':{jul:1,aug:1,sep:1,note:'Частично обезпечаване през юли–септември.'}
 };
+
+
+// VERIFIED OFFICIAL LIFEGUARD POSTS
+// Source: Областна администрация Бургас, "Схеми плажове 2020".
+// Original coordinates are BGS2005 / CCS2005 (EPSG:7801); lat/lng below are WGS84 conversions.
+// We keep source metadata because physical post positions can change between seasons.
+const officialLifeguardPosts=[
+  {beach:'Иракли',post:1,lat:42.7459772,lng:27.8900105,sourceYear:2020,sourceType:'official_scheme',verified:true},
+  {beach:'Иракли',post:2,lat:42.7408757,lng:27.8913621,sourceYear:2020,sourceType:'official_scheme',verified:true},
+
+  {beach:'Несебър - изток',post:1,lat:42.6563803,lng:27.7328875,sourceYear:2020,sourceType:'official_scheme',verified:true},
+
+  {beach:'Поморийска коса',post:1,lat:42.5835446,lng:27.6325721,sourceYear:2020,sourceType:'official_scheme',verified:true},
+  {beach:'Поморийска коса',post:2,lat:42.5808696,lng:27.6328848,sourceYear:2020,sourceType:'official_scheme',verified:true},
+
+  {beach:'Атанасовска коса',post:1,lat:42.5276076,lng:27.4903875,sourceYear:2020,sourceType:'official_scheme',verified:true},
+  {beach:'Атанасовска коса',post:2,lat:42.5196642,lng:27.4871377,sourceYear:2020,sourceType:'official_scheme',verified:true},
+
+  {beach:'Крайморие - юг 2',post:1,lat:42.4404921,lng:27.5022586,sourceYear:2020,sourceType:'official_scheme',verified:true},
+  {beach:'Крайморие - юг 2',post:2,lat:42.4389538,lng:27.5052856,sourceYear:2020,sourceType:'official_scheme',verified:true},
+
+  {beach:'Алепу',post:1,lat:42.3650353,lng:27.7102010,sourceYear:2020,sourceType:'official_scheme',verified:true},
+  {beach:'Алепу',post:2,lat:42.3560023,lng:27.7165006,sourceYear:2020,sourceType:'official_scheme',verified:true},
+
+  {beach:'Корал',post:1,lat:42.2172663,lng:27.7897216,sourceYear:2020,sourceType:'official_scheme',verified:true},
+  {beach:'Корал',post:2,lat:42.2154154,lng:27.7926317,sourceYear:2020,sourceType:'official_scheme',verified:true}
+];
+
+// For official 2026 "unguarded" status we only plot a warning when we have a trustworthy mapped anchor.
+// Several have partial seasonal lifeguard provision despite their official unguarded status.
+const officialUnguardedAnchors=[
+  {name:'Иракли',lat:42.7434,lng:27.8907,partialCoverage:true},
+  {name:'Несебър - изток',lat:42.65638,lng:27.73289,partialCoverage:true},
+  {name:'Поморийска коса',lat:42.5822,lng:27.6327,partialCoverage:true},
+  {name:'Атанасовска коса - част 2',lat:42.5236,lng:27.4888,partialCoverage:false},
+  {name:'Крайморие - юг 2',lat:42.4397,lng:27.5038,partialCoverage:false},
+  {name:'Алепу',lat:42.3605,lng:27.7134,partialCoverage:true},
+  {name:'Корал',lat:42.2163,lng:27.7912,partialCoverage:false}
+];
