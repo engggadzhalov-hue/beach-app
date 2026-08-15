@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Beach App GPS Prototype</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+ integrity="sha256-p4NxAoJBhIINfQ3ynQNMqONquuLZrvWSfTLwKQWbMZQ=" crossorigin=""/>
+
+<style>
+  :root{
+    --bg:#f5f8fb; --card:#ffffff; --text:#10233b; --muted:#6e7f92;
+    --blue:#1597ff; --green:#20b56b; --yellow:#f2b936; --red:#eb554f;
+    --line:#e8eef4;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text);background:#dce8f2}
+  .phone{max-width:430px;min-height:100vh;margin:0 auto;background:var(--bg);position:relative;overflow:hidden;box-shadow:0 0 30px rgba(0,0,0,.12)}
+  .topbar{height:64px;padding:18px 18px 10px;display:flex;align-items:center;justify-content:space-between;background:white;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:1000}
+  .brand{font-size:21px;font-weight:800}.subbrand{font-size:11px;color:var(--muted);font-weight:600}
+  .screen{display:none;padding-bottom:92px}.screen.active{display:block}
+  #map{height:430px;width:100%;z-index:1}
+  .map-wrap{position:relative}
+  .search{position:absolute;top:14px;left:14px;right:14px;z-index:500;background:white;border-radius:22px;padding:12px 15px;box-shadow:0 5px 18px rgba(0,0,0,.16);display:flex;align-items:center;gap:8px}
+  .search input{border:0;outline:0;width:100%;font-size:14px;background:transparent}
+  .gps-fab{position:absolute;right:14px;bottom:14px;z-index:500;width:48px;height:48px;border-radius:50%;background:white;box-shadow:0 5px 18px rgba(0,0,0,.16);display:grid;place-items:center;font-size:21px;cursor:pointer}
+  .section{padding:16px}
+  .section h2{font-size:18px;margin:4px 0 12px}
+  .card{background:var(--card);border-radius:18px;padding:16px;box-shadow:0 5px 18px rgba(15,50,80,.07);margin-bottom:12px}
+  .beachrow{display:flex;align-items:center;gap:12px;cursor:pointer}
+  .dot{width:13px;height:13px;border-radius:50%;flex:0 0 auto}
+  .beachrow .grow{flex:1}.name{font-weight:800}.small{font-size:12px;color:var(--muted);margin-top:3px}
+  .score{font-size:21px;font-weight:900}
+  .green{background:var(--green)} .yellow{background:var(--yellow)} .red{background:var(--red)}
+  .banner{padding:26px 18px;color:#fff;text-align:center}
+  .banner h1{font-size:22px;margin:8px 0 4px}.banner p{margin:0;opacity:.88}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .metric{background:white;border-radius:16px;padding:14px;border:1px solid var(--line)}
+  .metric b{display:block;font-size:20px;margin-top:5px}.metric span{font-size:12px;color:var(--muted)}
+  .pill{display:inline-block;border-radius:999px;padding:8px 11px;background:#edf7ff;color:#1267a5;font-weight:700;font-size:12px;margin:4px 4px 0 0}
+  button{border:0;border-radius:14px;padding:13px 16px;font-size:15px;font-weight:800;cursor:pointer}
+  .primary{background:var(--blue);color:white;width:100%}
+  .navbtn{background:#0f7edb;color:white;width:100%;display:flex;gap:8px;justify-content:center;align-items:center}
+  .secondary{background:#edf2f6;color:var(--text);width:100%}
+  .seg{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .seg button{padding:9px 11px;background:#edf2f6;color:var(--text);font-size:13px}
+  .seg button.selected{background:#dff2ff;color:#0876c7;outline:2px solid #84c9f5}
+  .nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(430px,100%);height:74px;background:white;border-top:1px solid var(--line);display:flex;z-index:1200;padding-bottom:env(safe-area-inset-bottom)}
+  .nav button{flex:1;background:white;border-radius:0;color:var(--muted);font-size:12px;padding:8px}.nav button.active{color:var(--blue)}
+  .nav .ico{display:block;font-size:21px;margin-bottom:3px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:92px;background:#132b43;color:white;padding:12px 16px;border-radius:14px;display:none;z-index:2000;max-width:360px;text-align:center}
+  .community{display:flex;gap:8px;align-items:center}.avatar{width:36px;height:36px;border-radius:50%;background:#d8e7f5;display:grid;place-items:center}
+  .confidence{height:8px;border-radius:99px;background:#e8eef4;overflow:hidden;margin-top:8px}.confidence div{height:100%;width:88%;background:var(--green)}
+  .location-status{font-size:12px;color:var(--muted);padding:10px 16px;background:#eef7ff;border-bottom:1px solid #dbeaf6}
+  .leaflet-popup-content-wrapper{border-radius:14px}
+  .popup-title{font-weight:800;margin-bottom:5px}
+  .popup-btn{margin-top:8px;background:var(--blue);color:white;border:0;border-radius:10px;padding:8px 10px;font-weight:800;cursor:pointer}
+</style>
+</head>
+
+<body>
+<div class="phone">
+  <div class="topbar">
+    <div>
+      <div class="brand">Project BEACH</div>
+      <div class="subbrand">LIVE COAST CONDITIONS</div>
+    </div>
+    <div>🌊 LIVE</div>
+  </div>
+
+  <div class="location-status" id="locationStatus">📍 GPS: натисни бутона върху картата, за да покажеш местоположението си.</div>
+
+  <main id="mapScreen" class="screen active">
+    <div class="map-wrap">
+      <div id="map"></div>
+      <div class="search">
+        <span>🔎</span>
+        <input id="searchInput" placeholder="Търси плаж..." oninput="filterBeaches()" />
+      </div>
+      <div class="gps-fab" onclick="locateUser()" title="Моето местоположение">📍</div>
+    </div>
+
+    <div class="section">
+      <h2>Плажове</h2>
+      <div id="beachList"></div>
+    </div>
+  </main>
+
+  <main id="detailsScreen" class="screen">
+    <div id="banner" class="banner yellow">
+      <div style="font-size:48px">🚩</div>
+      <h1 id="beachTitle">Плаж Хармани</h1>
+      <p id="flagText">ЖЪЛТ ФЛАГ · Повишено внимание</p>
+    </div>
+
+    <div class="section">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:end">
+          <div>
+            <div class="small">B.E.A.C.H. INDEX</div>
+            <div style="font-size:34px;font-weight:900" id="beachScore">78 / 100</div>
+          </div>
+          <div class="pill">88% достоверност</div>
+        </div>
+        <div class="confidence"><div></div></div>
+        <div class="small" style="margin-top:8px">Последно обновяване: преди 4 минути · 17 community сигнала</div>
+      </div>
+
+      <div class="grid">
+        <div class="metric">🌊 <span>Вълни</span><b id="waves">0.7 m</b></div>
+        <div class="metric">🌡️ <span>Вода</span><b id="water">25.1°C</b></div>
+        <div class="metric">🌬️ <span>Вятър</span><b id="wind">18 km/h</b></div>
+        <div class="metric">📍 <span>Разстояние</span><b id="distance">—</b></div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="name">Сигнали от хората</div>
+        <div style="margin-top:8px">
+          <span class="pill">🪼 Медузи: малко</span>
+          <span class="pill">🌿 Водорасли: средно</span>
+          <span class="pill">👥 Натоварено</span>
+          <span class="pill">🚗 Паркинг: има места</span>
+        </div>
+      </div>
+
+      <button class="navbtn" onclick="navigateToBeach()">🧭 Заведи ме там</button>
+      <div style="height:8px"></div>
+      <button class="primary" onclick="showReport()">+ Подай сигнал от този плаж</button>
+      <div style="height:8px"></div>
+      <button class="secondary" onclick="showMap()">← Назад към картата</button>
+    </div>
+  </main>
+
+  <main id="reportScreen" class="screen">
+    <div class="section">
+      <h2>Подай сигнал</h2>
+      <div class="small" id="reportBeach">Плаж Хармани · сигналът е публичен и временно валиден</div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="name">🚩 Какъв е флагът?</div>
+        <div class="seg">
+          <button onclick="selectSeg(this)">🟢 Зелен</button>
+          <button onclick="selectSeg(this)">🟡 Жълт</button>
+          <button onclick="selectSeg(this)">🔴 Червен</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="name">🪼 Медузи</div>
+        <div class="seg"><button onclick="selectSeg(this)">Няма</button><button onclick="selectSeg(this)">Малко</button><button onclick="selectSeg(this)">Много</button></div>
+      </div>
+
+      <div class="card">
+        <div class="name">🌿 Водорасли</div>
+        <div class="seg"><button onclick="selectSeg(this)">Няма</button><button onclick="selectSeg(this)">Малко</button><button onclick="selectSeg(this)">Много</button></div>
+      </div>
+
+      <div class="card">
+        <div class="name">👥 Натовареност</div>
+        <div class="seg"><button onclick="selectSeg(this)">Спокойно</button><button onclick="selectSeg(this)">Средно</button><button onclick="selectSeg(this)">Претъпкано</button></div>
+      </div>
+
+      <button class="primary" onclick="submitReport()">Изпрати сигнал</button>
+      <div style="height:8px"></div>
+      <button class="secondary" onclick="showDetails()">Отказ</button>
+    </div>
+  </main>
+
+  <nav class="nav">
+    <button class="active" onclick="showMap()"><span class="ico">🗺️</span>Карта</button>
+    <button onclick="toast('Тук ще добавим класация по B.E.A.C.H. Index')"><span class="ico">🏆</span>Топ</button>
+    <button onclick="showReport()"><span class="ico">➕</span>Сигнал</button>
+    <button onclick="toast('Профилът ще пази доверие, точки и история')"><span class="ico">👤</span>Профил</button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+ integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<script>
+const beaches = {
+  burgas: {
+    name:"Централен плаж Бургас", lat:42.4965, lng:27.4820,
+    flag:"green", flagText:"ЗЕЛЕН ФЛАГ · Добри условия", score:92,
+    waves:"0.3 m", water:"25.4°C", wind:"9 km/h",
+    note:"Спокойно море · няма сигнали за медузи"
+  },
+  harmani: {
+    name:"Хармани, Созопол", lat:42.4168, lng:27.6974,
+    flag:"yellow", flagText:"ЖЪЛТ ФЛАГ · Повишено внимание", score:78,
+    waves:"0.7 m", water:"25.1°C", wind:"18 km/h",
+    note:"Жълт флаг · малко медузи"
+  },
+  sunny: {
+    name:"Слънчев бряг", lat:42.6931, lng:27.7142,
+    flag:"red", flagText:"ЧЕРВЕН ФЛАГ · Не влизай във водата", score:41,
+    waves:"1.4 m", water:"24.9°C", wind:"31 km/h",
+    note:"Силно вълнение · червен флаг"
+  }
+};
+
+let current = "harmani";
+let userLat = null;
+let userLng = null;
+let userMarker = null;
+let accuracyCircle = null;
+
+const map = L.map('map', { zoomControl:true }).setView([42.55,27.58], 9);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+function flagColor(flag){
+  return flag === "green" ? "#20b56b" : flag === "yellow" ? "#f2b936" : "#eb554f";
+}
+
+function markerIcon(flag){
+  return L.divIcon({
+    className:'',
+    html:`<div style="
+      width:32px;height:32px;border-radius:50%;background:${flagColor(flag)};
+      border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,.3);
+      display:grid;place-items:center;font-size:16px;">🏖️</div>`,
+    iconSize:[32,32], iconAnchor:[16,16]
+  });
+}
+
+Object.entries(beaches).forEach(([id,b])=>{
+  const m=L.marker([b.lat,b.lng],{icon:markerIcon(b.flag)}).addTo(map);
+  m.bindPopup(`
+    <div class="popup-title">${b.name}</div>
+    <div>${b.flagText}</div>
+    <div style="margin-top:4px">B.E.A.C.H. Index: <b>${b.score}</b></div>
+    <button class="popup-btn" onclick="openBeach('${id}')">Виж детайли</button>
+  `);
+});
+
+function renderList(filter=""){
+  const el=document.getElementById("beachList");
+  el.innerHTML="";
+  const q=filter.trim().toLowerCase();
+  Object.entries(beaches).forEach(([id,b])=>{
+    if(q && !b.name.toLowerCase().includes(q)) return;
+    let dist = "";
+    if(userLat !== null){
+      const km = haversine(userLat,userLng,b.lat,b.lng);
+      dist = ` · ${km.toFixed(1)} km`;
+    }
+    el.innerHTML += `
+      <div class="card beachrow" onclick="openBeach('${id}')">
+        <div class="dot ${b.flag}"></div>
+        <div class="grow">
+          <div class="name">${b.name}</div>
+          <div class="small">${b.note}${dist}</div>
+        </div>
+        <div class="score">${b.score}</div>
+      </div>`;
+  });
+}
+
+function filterBeaches(){
+  renderList(document.getElementById("searchInput").value);
+}
+
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371;
+  const toRad=x=>x*Math.PI/180;
+  const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function locateUser(){
+  if(!navigator.geolocation){
+    toast("GPS не се поддържа от този браузър.");
+    return;
+  }
+  document.getElementById("locationStatus").textContent="📍 GPS: търся местоположението...";
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      userLat=pos.coords.latitude;
+      userLng=pos.coords.longitude;
+
+      if(userMarker) map.removeLayer(userMarker);
+      if(accuracyCircle) map.removeLayer(accuracyCircle);
+
+      userMarker=L.marker([userLat,userLng]).addTo(map).bindPopup("📍 Вие сте тук");
+      accuracyCircle=L.circle([userLat,userLng],{
+        radius:pos.coords.accuracy,
+        weight:1,
+        opacity:.4,
+        fillOpacity:.08
+      }).addTo(map);
+
+      map.setView([userLat,userLng],13);
+      document.getElementById("locationStatus").textContent=
+        `📍 GPS активен · точност около ${Math.round(pos.coords.accuracy)} m`;
+      renderList(document.getElementById("searchInput").value);
+      if(document.getElementById("detailsScreen").classList.contains("active")) updateDistance();
+    },
+    err=>{
+      let msg="Неуспешно GPS позициониране.";
+      if(err.code===1) msg="Разрешението за местоположение е отказано.";
+      if(err.code===2) msg="Местоположението не е налично.";
+      if(err.code===3) msg="GPS заявката изтече.";
+      document.getElementById("locationStatus").textContent="📍 GPS: "+msg;
+      toast(msg);
+    },
+    {enableHighAccuracy:true,timeout:12000,maximumAge:30000}
+  );
+}
+
+function setScreen(id){
+  document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  window.scrollTo(0,0);
+  if(id==="mapScreen") setTimeout(()=>map.invalidateSize(),150);
+}
+
+function openBeach(id){
+  current=id;
+  const b=beaches[id];
+  document.getElementById("beachTitle").textContent=b.name;
+  document.getElementById("flagText").textContent=b.flagText;
+  document.getElementById("beachScore").textContent=b.score+" / 100";
+  document.getElementById("waves").textContent=b.waves;
+  document.getElementById("water").textContent=b.water;
+  document.getElementById("wind").textContent=b.wind;
+  document.getElementById("banner").className="banner "+b.flag;
+  document.getElementById("reportBeach").textContent=b.name+" · сигналът е публичен и временно валиден";
+  updateDistance();
+  setScreen("detailsScreen");
+}
+
+function updateDistance(){
+  const b=beaches[current];
+  const el=document.getElementById("distance");
+  if(userLat===null){ el.textContent="GPS off"; return; }
+  el.textContent=haversine(userLat,userLng,b.lat,b.lng).toFixed(1)+" km";
+}
+
+function navigateToBeach(){
+  const b=beaches[current];
+  // Универсален Google Maps navigation URL. Работи на iOS/Android и desktop браузър.
+  const url=`https://www.google.com/maps/dir/?api=1&destination=${b.lat},${b.lng}&travelmode=driving`;
+  window.open(url,"_blank");
+}
+
+function showMap(){ setScreen("mapScreen"); }
+function showDetails(){ openBeach(current); }
+function showReport(){
+  document.getElementById("reportBeach").textContent=beaches[current].name+" · сигналът е публичен и временно валиден";
+  setScreen("reportScreen");
+}
+function selectSeg(btn){
+  const p=btn.parentElement;
+  p.querySelectorAll("button").forEach(b=>b.classList.remove("selected"));
+  btn.classList.add("selected");
+}
+function toast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.style.display="block";
+  setTimeout(()=>t.style.display="none",2600);
+}
+function submitReport(){
+  toast("✅ Благодарим! Сигналът е добавен към community данните.");
+  setTimeout(()=>showDetails(),700);
+}
+
+renderList();
+setTimeout(()=>map.invalidateSize(),200);
+</script>
+</body>
+</html>
