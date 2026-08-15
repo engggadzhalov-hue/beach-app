@@ -147,3 +147,38 @@ nav button.active-nav{color:var(--blue);font-weight:800}
 .prototype-status-test small{font-size:9px;color:var(--muted);margin:3px 0 8px}
 .prototype-status-test select{width:100%;padding:9px;margin:4px 0;border:1px solid #dbe4eb;border-radius:10px;background:#fff}
 .prototype-status-test button{width:100%;margin-top:6px;border:0;border-radius:10px;padding:10px;background:#e8f3fb;color:#176b9f;font-weight:900}
+
+
+/* v2.5 compact scrollable beach sheet */
+.sheet{
+  max-height:min(68dvh,560px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-top:48px;
+  padding-bottom:14px;
+  scrollbar-width:thin;
+}
+.sheet-close{
+  position:sticky !important;
+  top:0 !important;
+  float:right;
+  margin-top:-38px;
+  margin-right:-4px;
+  z-index:50 !important;
+  box-shadow:0 2px 8px #0002;
+}
+.sheet .metrics{margin-top:8px}
+.sheet .metric{padding:7px}
+.sheet .actions{
+  position:sticky;
+  bottom:-1px;
+  background:white;
+  padding-top:8px;
+  padding-bottom:2px;
+  z-index:20;
+}
+@media (max-height:700px){
+  .sheet{max-height:60dvh}
+  .live-grid{grid-template-columns:repeat(4,1fr)}
+  .live-conditions,.status-info,.lifeguard-info{padding:8px}
+}

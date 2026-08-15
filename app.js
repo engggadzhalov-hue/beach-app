@@ -1,4 +1,4 @@
-let map,selected,userMarker=null,accuracyCircle=null,watchId=null,userPos=null,lifeguardMarkers=[],beachMarkers=[],beachGroupMarkers=[],liveConditions=new Map(),dynamicStatuses=new Map();
+let map,selected,userMarker=null,accuracyCircle=null,watchId=null,userPos=null,lifeguardMarkers=[],beachMarkers=[],beachGroupMarkers=[],liveConditions=new Map(),dynamicStatuses=new Map(),forecastRefreshTimer=null;
 let currentPanel = 'map';
 
 function c(f){return f==='green'?'#22b66f':f==='yellow'?'#f3b933':'#e94f4a'}
@@ -34,6 +34,23 @@ function sourcePriority(source){
   }[source] || 0;
 }
 
+
+function sourceTtlMs(source){
+  return {
+    lifeguard: 6*60*60*1000,   // 6 часа
+    camera: 2*60*60*1000,      // 2 часа
+    community: 90*60*1000,     // 90 минути
+    forecast: 45*60*1000,      // 45 минути
+    fallback: 10*60*1000
+  }[source] || 60*60*1000;
+}
+
+function isStatusExpired(status){
+  if(!status?.updatedAt) return status?.source !== 'fallback';
+  return (Date.now()-status.updatedAt) > sourceTtlMs(status.source);
+}
+
+
 function sourceIcon(source){
   return {
     lifeguard:'🛟',
@@ -55,15 +72,21 @@ function sourceLabel(source){
 }
 
 function getBeachDynamicStatus(b){
-  const saved = dynamicStatuses.get(beachKey(b));
-  if(saved) return saved;
+  const key=beachKey(b);
+  const saved=dynamicStatuses.get(key);
+
+  if(saved && !isStatusExpired(saved)) return saved;
+
+  if(saved && isStatusExpired(saved)){
+    dynamicStatuses.delete(key);
+  }
 
   return {
     flag:b.flag || 'green',
     source:'fallback',
-    confidence:25,
+    confidence:20,
     updatedAt:null,
-    reason:'Няма по-надежден актуален източник.'
+    reason:'Няма актуален потвърден източник.'
   };
 }
 
@@ -71,10 +94,12 @@ function setBeachDynamicStatus(b,status){
   const key=beachKey(b);
   const current=getBeachDynamicStatus(b);
 
-  // Higher-priority sources replace lower-priority ones.
-  // Same source may update itself if newer.
+  const currentExpired=isStatusExpired(current);
+  const incomingPriority=sourcePriority(status.source);
+  const currentPriority=currentExpired?0:sourcePriority(current.source);
+
   if(
-    sourcePriority(status.source) > sourcePriority(current.source) ||
+    incomingPriority > currentPriority ||
     status.source === current.source ||
     current.source === 'fallback'
   ){
@@ -90,18 +115,17 @@ function setBeachDynamicStatus(b,status){
 
 function useForecastAsStatus(b,d){
   const current=getBeachDynamicStatus(b);
-  const hour=localHour();
 
-  // Forecast is especially useful in the early morning.
-  // Later it remains fallback only if no stronger source exists.
-  const canUseForecast =
-    current.source === 'fallback' ||
-    current.source === 'forecast';
-
-  if(!canUseForecast) return;
+  // Forecast is the automatic fallback at any time of day.
+  // It never replaces a fresh stronger source.
+  if(!['fallback','forecast'].includes(current.source)) return;
 
   const flag=predictionFlagFromLive(d);
-  let confidence= hour < 9 ? 70 : 55;
+  const hour=localHour();
+
+  // Slightly higher confidence early in the day when the app explicitly
+  // relies on the forecast before on-site confirmation appears.
+  const confidence=hour<9 ? 70 : 58;
 
   setBeachDynamicStatus(b,{
     flag,
@@ -205,6 +229,7 @@ function renderStatusInfo(b){
   const s=getBeachDynamicStatus(b);
   const flagText=s.flag==='green'?'ЗЕЛЕН':s.flag==='yellow'?'ЖЪЛТ':'ЧЕРВЕН';
   const updated=s.updatedAt ? ` · обновено ${new Date(s.updatedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : '';
+  const validUntil=s.updatedAt ? new Date(s.updatedAt+sourceTtlMs(s.source)).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : null;
 
   box.innerHTML=`
     <div class="status-info-title">
@@ -212,12 +237,78 @@ function renderStatusInfo(b){
       <b>${flagText}</b>
       <span class="status-source">${sourceIcon(s.source)} ${sourceLabel(s.source)}</span>
     </div>
-    <div class="status-confidence">Достоверност: <b>${s.confidence}%</b>${updated}</div>
+    <div class="status-confidence">Достоверност: <b>${s.confidence}%</b>${updated}${validUntil?` · валиден до ${validUntil}`:''}</div>
     <div class="status-reason">${s.reason || ''}</div>
     ${s.source==='forecast'
       ? '<div class="forecast-warning">Прогнозен статус — не е официален спасителен флаг.</div>'
       : ''}
   `;
+}
+
+
+async function refreshAllBeachForecastStatuses(){
+  const unique=[];
+  const seen=new Set();
+
+  beaches.forEach(b=>{
+    const k=beachKey(b);
+    if(!seen.has(k)){
+      seen.add(k);
+      unique.push(b);
+    }
+  });
+
+  const concurrency=6;
+  let cursor=0;
+
+  async function worker(){
+    while(cursor<unique.length){
+      const b=unique[cursor++];
+      try{
+        const d=await fetchLiveConditions(b);
+        useForecastAsStatus(b,d);
+      }catch(e){
+        // Keep the existing status if one request fails.
+      }
+      // Tiny pause so mobile browsers are not flooded with requests.
+      await new Promise(r=>setTimeout(r,80));
+    }
+  }
+
+  await Promise.all(Array.from({length:Math.min(concurrency,unique.length)},worker));
+  refreshGroupMarkers();
+}
+
+function scheduleForecastRefresh(){
+  if(forecastRefreshTimer) clearInterval(forecastRefreshTimer);
+
+  // First automatic pass shortly after the map is ready.
+  setTimeout(()=>refreshAllBeachForecastStatuses(),900);
+
+  // Then refresh every 30 minutes.
+  forecastRefreshTimer=setInterval(()=>{
+    refreshAllBeachForecastStatuses();
+    cleanupExpiredStatuses();
+  },30*60*1000);
+}
+
+function cleanupExpiredStatuses(){
+  let changed=false;
+  dynamicStatuses.forEach((status,key)=>{
+    if(isStatusExpired(status)){
+      dynamicStatuses.delete(key);
+      changed=true;
+    }
+  });
+
+  if(changed){
+    beaches.forEach(updateOneBeachMarker);
+    refreshGroupMarkers();
+    if(selected){
+      renderStatusInfo(selected);
+      fetchLiveConditions(selected).then(d=>useForecastAsStatus(selected,d)).catch(()=>{});
+    }
+  }
 }
 
 function renderBeachMarkers(){
@@ -297,6 +388,7 @@ function initMap(){
   injectPanels();
   injectSheetCloseButton();
   renderVerifiedLifeguardPosts();
+  scheduleForecastRefresh();
 }
 
 
@@ -539,7 +631,9 @@ function selectBeach(b){
  document.getElementById('waves').textContent=b.waves;
  document.getElementById('water').textContent=b.water;
  document.getElementById('wind').textContent=b.wind;
- document.getElementById('sheet').classList.add('show');
+ const sheetEl=document.getElementById('sheet');
+ sheetEl.classList.add('show');
+ sheetEl.scrollTop=0;
  map.panTo({lat:b.lat,lng:b.lng});
  refreshSelectedDistance();
  renderLifeguardInfo(b);
