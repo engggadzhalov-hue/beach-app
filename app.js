@@ -649,6 +649,7 @@ function selectBeach(b){
    if(sheet) sheet.insertBefore(live,actions||null);
  }
  renderLiveConditions(b);
+ if(typeof renderBeachCommunityReports==='function') renderBeachCommunityReports(b);
 }
 
 

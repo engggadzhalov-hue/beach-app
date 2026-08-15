@@ -209,3 +209,31 @@ nav button.active-nav{color:var(--blue);font-weight:800}
   font-size:10px;
   line-height:1.4;
 }
+
+
+/* v2.8 community confirmations */
+.community-reports-box{
+  margin:0 0 10px;
+  padding:10px;
+  background:#f8fbfd;
+  border:1px solid #e2edf4;
+  border-radius:14px;
+}
+.community-box-title{font-weight:900;font-size:12px;margin-bottom:8px}
+.community-empty{font-size:10px;color:var(--muted)}
+.community-report{
+  background:white;
+  border-radius:11px;
+  padding:9px;
+  margin-top:7px;
+  box-shadow:0 1px 4px #0000000d;
+}
+.community-report-main b{display:block;font-size:10px;line-height:1.35}
+.community-report-main small{display:block;font-size:8px;color:var(--muted);margin-top:4px}
+.community-vote-row{display:flex;gap:6px;margin-top:7px}
+.community-vote-row button{
+  flex:1;border:0;border-radius:9px;padding:7px 5px;
+  background:#eef3f6;color:#496275;font-size:9px;font-weight:800
+}
+.community-vote-row button.selected{background:#dff2ff;color:#0876c7;outline:1px solid #7bc5f4}
+.community-vote-row button:disabled{opacity:.35}

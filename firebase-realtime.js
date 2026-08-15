@@ -2,6 +2,8 @@
 let beachFirebaseDb = null;
 let beachFirebaseUser = null;
 let beachReports = [];
+let beachConfirmations = [];
+let confirmationsUnsubscribe = null;
 
 function beachFirebaseId(b){
   return (b.name||'').toLowerCase()
@@ -53,6 +55,16 @@ async function initBeachFirebase(){
         beachFirebaseBadge('🟠 Community read error',false);
       });
 
+    if(confirmationsUnsubscribe) confirmationsUnsubscribe();
+    confirmationsUnsubscribe = beachFirebaseDb.collection('confirmations')
+      .orderBy('createdAt','desc')
+      .limit(500)
+      .onSnapshot(snap=>{
+        beachConfirmations=snap.docs.map(d=>({id:d.id,...d.data()}));
+        applyRealtimeCommunityStatuses();
+        if(typeof selected!=='undefined' && selected) renderBeachCommunityReports(selected);
+      },err=>console.error('confirmations listener',err));
+
   }catch(e){
     console.error(e);
     beachFirebaseBadge('🟠 Community offline',false);
@@ -62,6 +74,115 @@ async function initBeachFirebase(){
 function reportAgeMs(r){
   const d=r.createdAt?.toDate ? r.createdAt.toDate() : null;
   return d ? Date.now()-d.getTime() : Infinity;
+}
+
+
+function confirmationCounts(reportId){
+  const items=beachConfirmations.filter(c=>c.reportId===reportId);
+  return {
+    confirm:items.filter(c=>c.value==='confirm').length,
+    outdated:items.filter(c=>c.value==='outdated').length,
+    total:items.length
+  };
+}
+
+function reportWeightFromConfirmations(report){
+  const c=confirmationCounts(report.id);
+  // Base vote = 1. Confirmations increase weight modestly.
+  // "Outdated" confirmations reduce influence but do not create negative votes.
+  return Math.max(0, 1 + c.confirm*0.35 - c.outdated*0.5);
+}
+
+function myConfirmationFor(reportId){
+  if(!beachFirebaseUser) return null;
+  return beachConfirmations.find(c=>c.reportId===reportId && c.userId===beachFirebaseUser.uid) || null;
+}
+
+function confirmationDocId(reportId){
+  return `${safeIdPart(beachFirebaseUser.uid)}__${safeIdPart(reportId)}`;
+}
+
+async function voteOnReport(reportId,value){
+  if(!beachFirebaseDb || !beachFirebaseUser) return;
+  const report=beachReports.find(r=>r.id===reportId);
+  if(!report) return;
+
+  if(report.userId===beachFirebaseUser.uid){
+    alert('Не можеш да потвърждаваш собствения си сигнал.');
+    return;
+  }
+
+  const id=confirmationDocId(reportId);
+  await beachFirebaseDb.collection('confirmations').doc(id).set({
+    userId:beachFirebaseUser.uid,
+    reportId,
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+    value
+  },{merge:true});
+}
+
+function formatReportAge(r){
+  const d=r.createdAt?.toDate ? r.createdAt.toDate() : null;
+  if(!d) return 'сега';
+  const min=Math.max(0,Math.round((Date.now()-d.getTime())/60000));
+  if(min<1) return 'сега';
+  if(min<60) return `преди ${min} мин`;
+  return `преди ${Math.round(min/60)} ч`;
+}
+
+function reportSummary(r){
+  const parts=[];
+  if(r.flag) parts.push(r.flag==='green'?'🟢 Зелен':r.flag==='yellow'?'🟡 Жълт':'🔴 Червен');
+  if(r.jellyfish) parts.push(`🪼 ${r.jellyfish==='none'?'няма':r.jellyfish==='low'?'малко':'много'}`);
+  if(r.seaweed) parts.push(`🌿 ${r.seaweed==='none'?'няма':r.seaweed==='low'?'малко':'много'}`);
+  if(r.crowd) parts.push(`👥 ${r.crowd==='quiet'?'спокойно':r.crowd==='medium'?'средно':'претъпкано'}`);
+  if(r.lifeguardCorrection) parts.push(`🛟 ${r.lifeguardCorrection}`);
+  return parts.join(' · ') || r.type;
+}
+
+function renderBeachCommunityReports(b){
+  const sheet=document.getElementById('sheet');
+  if(!sheet) return;
+
+  let box=document.getElementById('communityReportsBox');
+  if(!box){
+    box=document.createElement('div');
+    box.id='communityReportsBox';
+    box.className='community-reports-box';
+    const actions=sheet.querySelector('.actions');
+    sheet.insertBefore(box,actions||null);
+  }
+
+  const id=beachFirebaseId(b);
+  const items=beachReports
+    .filter(r=>r.beachId===id && r.type!=='newBeach' && reportAgeMs(r)<=6*60*60*1000)
+    .slice(0,6);
+
+  if(!items.length){
+    box.innerHTML='<div class="community-box-title">👥 Community сигнали</div><div class="community-empty">Няма пресни сигнали за този плаж.</div>';
+    return;
+  }
+
+  box.innerHTML=`
+    <div class="community-box-title">👥 Community сигнали</div>
+    ${items.map(r=>{
+      const c=confirmationCounts(r.id);
+      const mine=myConfirmationFor(r.id);
+      const own=beachFirebaseUser && r.userId===beachFirebaseUser.uid;
+      return `<div class="community-report">
+        <div class="community-report-main">
+          <b>${reportSummary(r)}</b>
+          <small>${formatReportAge(r)} · ✅ ${c.confirm} · ⏱ ${c.outdated}</small>
+        </div>
+        <div class="community-vote-row">
+          <button ${own?'disabled':''} class="${mine?.value==='confirm'?'selected':''}"
+            onclick="voteOnReport('${r.id}','confirm')">✅ Потвърждавам</button>
+          <button ${own?'disabled':''} class="${mine?.value==='outdated'?'selected':''}"
+            onclick="voteOnReport('${r.id}','outdated')">⏱ Не е актуално</button>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
 }
 
 function applyRealtimeCommunityStatuses(){
@@ -82,7 +203,7 @@ function applyRealtimeCommunityStatuses(){
 
     const counts={green:0,yellow:0,red:0};
     votes.forEach(r=>{
-      if(counts[r.flag]!==undefined) counts[r.flag] += 1;
+      if(counts[r.flag]!==undefined) counts[r.flag] += reportWeightFromConfirmations(r);
     });
 
     const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
@@ -241,3 +362,6 @@ window.submitPrototypeReport = async function(){
 };
 
 window.addEventListener('load',()=>setTimeout(initBeachFirebase,500));
+
+window.voteOnReport = voteOnReport;
+window.renderBeachCommunityReports = renderBeachCommunityReports;
