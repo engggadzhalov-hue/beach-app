@@ -1,0 +1,16 @@
+:root{--blue:#168fe5;--ink:#10263d;--muted:#66798d;--green:#22b66f;--yellow:#f3b933;--red:#e94f4a}
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Arial,sans-serif;color:var(--ink)}
+.app{height:100dvh;max-width:520px;margin:auto;position:relative;overflow:hidden;background:#fff}
+header{height:64px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5edf4}
+.brand{font-size:20px;font-weight:900}.sub{font-size:10px;color:#6b7c8d;letter-spacing:.12em}
+#map{height:calc(100dvh - 138px);width:100%}
+.search{position:absolute;z-index:5;top:78px;left:14px;right:14px;background:#fff;border-radius:24px;box-shadow:0 4px 16px #0002;padding:11px 15px;display:flex;gap:8px}
+.search input{width:100%;border:0;outline:0;font-size:15px}
+.gps{position:absolute;z-index:5;right:15px;bottom:90px;width:48px;height:48px;border:0;border-radius:50%;background:#fff;box-shadow:0 3px 12px #0003;font-size:21px}
+nav{height:74px;display:flex;border-top:1px solid #e3eaf0;background:#fff}
+nav button{flex:1;border:0;background:#fff;color:#6d7e90;font-size:11px}.ico{font-size:21px;display:block;margin-bottom:3px}
+.sheet{display:none;position:absolute;z-index:7;left:10px;right:10px;bottom:82px;background:#fff;border-radius:20px;padding:16px;box-shadow:0 6px 28px #0003}
+.sheet.show{display:block}.row{display:flex;justify-content:space-between;gap:10px}.name{font-weight:900;font-size:18px}.status{font-weight:800}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metric{background:#f3f7fa;border-radius:12px;padding:9px;text-align:center;font-size:12px}.metric b{display:block;font-size:15px;margin-top:3px}
+.actions{display:flex;gap:8px}.actions button{flex:1;border:0;border-radius:12px;padding:12px;font-weight:800}.go{background:var(--blue);color:#fff}.details{background:#eaf2f7}
+.notice{position:absolute;z-index:5;top:132px;left:14px;background:#fff;padding:7px 10px;border-radius:12px;box-shadow:0 3px 10px #0002;font-size:11px;color:var(--muted)}
