@@ -1,4 +1,4 @@
-let map,selected,userMarker=null,accuracyCircle=null,watchId=null,userPos=null,lifeguardMarkers=[];
+let map,selected,userMarker=null,accuracyCircle=null,watchId=null,userPos=null,lifeguardMarkers=[],beachMarkers=[];
 let currentPanel = 'map';
 
 function c(f){return f==='green'?'#22b66f':f==='yellow'?'#f3b933':'#e94f4a'}
@@ -14,20 +14,29 @@ function initMap(){
   });
 
   beaches.forEach(b=>{
+    const labelText=b.flag==='green'?'З':b.flag==='yellow'?'Ж':'Ч';
     const m=new google.maps.Marker({
       position:{lat:b.lat,lng:b.lng},
       map,
-      title:b.name,
+      title:`${b.name} · ${b.flag==='green'?'Зелен':b.flag==='yellow'?'Жълт':'Червен'} флаг`,
+      label:{
+        text:labelText,
+        color:'#ffffff',
+        fontSize:'9px',
+        fontWeight:'900'
+      },
       icon:{
         path:google.maps.SymbolPath.CIRCLE,
-        scale:10,
+        scale:9,
         fillColor:c(b.flag),
         fillOpacity:1,
-        strokeColor:'#fff',
-        strokeWeight:3
-      }
+        strokeColor:'#ffffff',
+        strokeWeight:2
+      },
+      zIndex:500
     });
     m.addListener('click',()=>selectBeach(b));
+    beachMarkers.push(m);
   });
 
   map.addListener('click',closeBeachSheet);
@@ -49,19 +58,20 @@ function renderVerifiedLifeguardPosts(){
     .forEach(p=>{
       const m=new google.maps.Marker({
         position:{lat:p.lat,lng:p.lng},
-        map,
+        map:null,
         title:`Спасителен пост №${p.post} — ${p.beach}`,
-        label:{text:'🛟',fontSize:'17px'},
+        label:{text:'🛟',fontSize:'11px'},
         icon:{
           path:google.maps.SymbolPath.CIRCLE,
-          scale:14,
+          scale:9,
           fillColor:'#ffffff',
           fillOpacity:1,
           strokeColor:'#168fe5',
-          strokeWeight:2
+          strokeWeight:1.5
         },
         zIndex:800
       });
+      m.markerType='lifeguard';
       m.addListener('click',()=>{
         info.setContent(`
           <div style="max-width:230px">
@@ -81,19 +91,20 @@ function renderVerifiedLifeguardPosts(){
   officialUnguardedAnchors.forEach(z=>{
     const m=new google.maps.Marker({
       position:{lat:z.lat,lng:z.lng},
-      map,
+      map:null,
       title:`Неохраняем плаж: ${z.name}`,
-      label:{text:'!',color:'#7b4b00',fontWeight:'900',fontSize:'15px'},
+      label:{text:'!',color:'#7b4b00',fontWeight:'900',fontSize:'10px'},
       icon:{
         path:google.maps.SymbolPath.CIRCLE,
-        scale:13,
+        scale:8,
         fillColor:'#ffd65a',
         fillOpacity:1,
         strokeColor:'#ffffff',
-        strokeWeight:3
+        strokeWeight:2
       },
       zIndex:650
     });
+    m.markerType='unguarded';
     m.addListener('click',()=>{
       info.setContent(`
         <div style="max-width:240px">
@@ -109,6 +120,23 @@ function renderVerifiedLifeguardPosts(){
     });
     lifeguardMarkers.push(m);
   });
+
+  updateDetailMarkerVisibility();
+  map.addListener('zoom_changed',updateDetailMarkerVisibility);
+}
+
+function updateDetailMarkerVisibility(){
+  if(!map) return;
+  const zoom=map.getZoom()||0;
+
+  lifeguardMarkers.forEach(m=>{
+    // Hide detailed rescue information until the user zooms in.
+    const minZoom=m.markerType==='lifeguard'?14:13;
+    m.setMap(zoom>=minZoom?map:null);
+  });
+
+  // Beach flag dots stay visible at all normal map zooms.
+  beachMarkers.forEach(m=>m.setVisible(zoom>=7));
 }
 
 function startOfficialPostCorrection(beachName,postNo){
@@ -479,11 +507,11 @@ function submitPrototypeReport(){
 
 function getRank(confirmedReports,trust){
  const ranks=[
-   {name:'Нов наблюдател',icon:'🌱',min:0,trust:0,next:5},
-   {name:'Плажен скаут',icon:'🔎',min:5,trust:60,next:20},
-   {name:'Брегови наблюдател',icon:'🌊',min:20,trust:70,next:50},
-   {name:'Местен експерт',icon:'⭐',min:50,trust:80,next:100},
-   {name:'Доверен наблюдател',icon:'🛟',min:100,trust:90,next:null}
+   {name:'Пясъчен новобранец',icon:'🐣',min:0,trust:0,next:5,tag:'Първи стъпки по брега'},
+   {name:'Морски вълк',icon:'🐺',min:5,trust:60,next:20,tag:'Започва да познава брега'},
+   {name:'Бесен гларус',icon:'🦅',min:20,trust:70,next:50,tag:'Нищо по брега не му убягва'},
+   {name:'Батка',icon:'💪',min:50,trust:80,next:100,tag:'Тежка дума на плажа'},
+   {name:'Мич Бюканън',icon:'🏆',min:100,trust:90,next:null,tag:'Легенда на брега'}
  ];
  let rank=ranks[0];
  ranks.forEach(r=>{if(confirmedReports>=r.min && trust>=r.trust) rank=r;});
@@ -492,9 +520,8 @@ function getRank(confirmedReports,trust){
 
 function renderProfilePanel(){
  document.getElementById('panelTitle').textContent='Профил и ранг';
- document.getElementById('panelSubtitle').textContent='Рангът расте от потвърдени, не от просто изпратени сигнали';
+ document.getElementById('panelSubtitle').textContent='Рангът расте от потвърдени и точни сигнали';
 
- // Prototype user state; backend will replace this.
  const user={confirmedReports:0,submittedReports:0,confirmations:0,trust:100,points:0};
  const rank=getRank(user.confirmedReports,user.trust);
  const progress=rank.next?Math.min(100,(user.confirmedReports/rank.next)*100):100;
@@ -503,11 +530,10 @@ function renderProfilePanel(){
    <div class="profile-card">
      <div class="profile-avatar">${rank.icon}</div>
      <h2>${rank.name}</h2>
+     <div class="rank-tagline">${rank.tag}</div>
      <p>Достоверност: <b>${user.trust}%</b></p>
 
-     <div class="rank-progress">
-       <div style="width:${progress}%"></div>
-     </div>
+     <div class="rank-progress"><div style="width:${progress}%"></div></div>
      <small class="rank-next">${rank.next?`${user.confirmedReports} / ${rank.next} потвърдени сигнала до следващото ниво`:'Максимален community ранг'}</small>
 
      <div class="profile-stats">
@@ -518,12 +544,12 @@ function renderProfilePanel(){
    </div>
 
    <div class="rank-card">
-     <b>🏅 Рангове</b>
-     <div class="rank-row"><span>🌱 Нов наблюдател</span><small>старт</small></div>
-     <div class="rank-row"><span>🔎 Плажен скаут</span><small>5+ потвърдени · ≥60% доверие</small></div>
-     <div class="rank-row"><span>🌊 Брегови наблюдател</span><small>20+ · ≥70%</small></div>
-     <div class="rank-row"><span>⭐ Местен експерт</span><small>50+ · ≥80%</small></div>
-     <div class="rank-row"><span>🛟 Доверен наблюдател</span><small>100+ · ≥90%</small></div>
+     <b>🏅 Морски рангове</b>
+     <div class="rank-row"><span>🐣 Пясъчен новобранец</span><small>старт</small></div>
+     <div class="rank-row"><span>🐺 Морски вълк</span><small>5+ потвърдени · ≥60% доверие</small></div>
+     <div class="rank-row"><span>🦅 Бесен гларус</span><small>20+ · ≥70%</small></div>
+     <div class="rank-row"><span>💪 Батка</span><small>50+ · ≥80%</small></div>
+     <div class="rank-row"><span>🏆 Мич Бюканън</span><small>100+ · ≥90%</small></div>
    </div>
 
    <div class="info-card">
@@ -532,8 +558,8 @@ function renderProfilePanel(){
    </div>
 
    <div class="info-card">
-     <b>Важно</b>
-     <p>Дори потребител с най-висок ранг няма сам да може да променя официален спасителен пост или официален неохраняем статус. Community корекцията ще се показва отделно, докато не бъде потвърдена.</p>
+     <b>Официалните данни остават отделни</b>
+     <p>Дори най-високият community ранг не променя сам официален спасителен пост или официален неохраняем статус. Първо се събират корекции и потвърждения.</p>
    </div>
  `;
 }

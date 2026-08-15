@@ -107,3 +107,7 @@ nav button.active-nav{color:var(--blue);font-weight:800}
 .rank-row{display:flex;justify-content:space-between;gap:8px;padding:10px 0;border-top:1px solid #edf1f4;font-size:12px}
 .rank-row:first-of-type{margin-top:8px}
 .rank-row small{color:var(--muted);text-align:right;font-size:9px;max-width:48%}
+
+
+/* v1.6 compact map detail markers + playful ranks */
+.rank-tagline{font-size:11px;color:var(--muted);margin-top:-2px;margin-bottom:8px;font-weight:700}
