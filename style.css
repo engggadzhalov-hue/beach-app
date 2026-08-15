@@ -81,3 +81,19 @@ nav button.active-nav{color:var(--blue);font-weight:800}
 .profile-stats div{background:#f3f7fa;border-radius:12px;padding:12px 6px}
 .profile-stats b{display:block;font-size:18px}.profile-stats span{font-size:10px;color:var(--muted)}
 .info-card p{color:var(--muted);line-height:1.45;margin-bottom:0}
+
+/* v1.4 lifeguards + official catalog */
+.lifeguard-info{background:#f6fbff;border:1px solid #d9eaf6;border-radius:13px;padding:11px;margin:4px 0 12px}
+.lifeguard-head{font-weight:900;font-size:13px}.lifeguard-note{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.35}
+.lifeguard-report-btn{margin-top:9px;width:100%;border:0;border-radius:10px;padding:9px;background:#e8f3fb;color:#176b9f;font-weight:800;font-size:11px}
+.catalog-tabs{display:flex;gap:8px;margin-bottom:12px;position:sticky;top:68px;z-index:2;background:#f5f8fb;padding-bottom:7px}
+.catalog-tabs button{flex:1;border:0;border-radius:12px;padding:10px;background:#e7eef4;font-weight:800;color:var(--ink)}
+.catalog-tabs button.tab-active{background:var(--blue);color:white}
+.official-note{background:#fff7df;border:1px solid #f2d888;border-radius:13px;padding:11px;font-size:11px;line-height:1.4;margin-bottom:12px}
+.unguarded-group{background:white;border-radius:16px;padding:12px;margin-bottom:12px;box-shadow:0 4px 14px #16354b12}
+.unguarded-group h3{font-size:14px;margin:0 0 8px}
+.unguarded-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid #edf1f4}
+.unguarded-row:first-of-type{border-top:0}
+.unguarded-row>div{flex:1}.unguarded-row b{font-size:12px}.unguarded-row small{display:block;color:var(--muted);font-size:10px;margin-top:3px;line-height:1.3}
+.unguarded-row button{border:0;border-radius:10px;padding:7px 9px;background:#eef5fa;color:#176b9f;font-size:10px;font-weight:800}
+.gps-evidence{margin-top:12px;padding:10px;border-radius:11px;background:#eef8ff;color:#4e687b;font-size:11px;line-height:1.35}
