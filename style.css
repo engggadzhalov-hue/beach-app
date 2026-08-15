@@ -237,3 +237,242 @@ nav button.active-nav{color:var(--blue);font-weight:800}
 }
 .community-vote-row button.selected{background:#dff2ff;color:#0876c7;outline:1px solid #7bc5f4}
 .community-vote-row button:disabled{opacity:.35}
+
+
+/* v2.9 community summary + beach chat */
+.community-condition-summary{
+  margin:0 0 10px;
+  padding:10px;
+  background:#ffffff;
+  border:1px solid #e3ebf1;
+  border-radius:14px;
+}
+.community-summary-title{font-weight:900;font-size:12px;margin-bottom:8px}
+.community-summary-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;
+}
+.community-summary-grid>div{
+  background:#f5f9fc;
+  border-radius:10px;
+  padding:8px 5px;
+  text-align:center;
+}
+.community-summary-grid span,
+.community-summary-grid b,
+.community-summary-grid small{display:block}
+.community-summary-grid span{font-size:9px;color:var(--muted)}
+.community-summary-grid b{font-size:12px;margin-top:4px}
+.community-summary-grid small{font-size:7px;color:var(--muted);margin-top:3px;line-height:1.25}
+
+.beach-chat-box{
+  margin:0 0 10px;
+  padding:10px;
+  background:#f7fbff;
+  border:1px solid #dcebf5;
+  border-radius:14px;
+}
+.chat-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}
+.chat-head b,.chat-head small{display:block}
+.chat-head b{font-size:12px}
+.chat-head small,.chat-head span{font-size:8px;color:var(--muted)}
+.chat-messages{
+  max-height:180px;
+  overflow-y:auto;
+  background:#fff;
+  border-radius:11px;
+  padding:8px;
+}
+.chat-empty{font-size:9px;color:var(--muted);padding:8px}
+.chat-message{max-width:88%;margin:6px 0}
+.chat-message.mine{margin-left:auto;text-align:right}
+.chat-meta{font-size:7px;color:var(--muted);margin-bottom:2px}
+.chat-text{
+  display:inline-block;
+  background:#eef4f7;
+  border-radius:10px;
+  padding:7px 9px;
+  font-size:9px;
+  line-height:1.35;
+  text-align:left;
+  word-break:break-word;
+}
+.chat-message.mine .chat-text{background:#dff2ff}
+.chat-compose{display:flex;gap:6px;margin-top:8px}
+.chat-compose input{
+  flex:1;
+  min-width:0;
+  border:1px solid #d8e4ec;
+  border-radius:10px;
+  padding:9px 10px;
+  font-size:9px;
+}
+.chat-compose button{
+  border:0;
+  border-radius:10px;
+  background:var(--blue);
+  color:white;
+  padding:8px 10px;
+  font-size:9px;
+  font-weight:900;
+}
+.chat-note{font-size:7px;color:var(--muted);margin-top:6px;line-height:1.3}
+
+
+/* v3.0 compact beach sheet + separate community/chat overlays */
+.beach-quick-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin:0 0 10px;
+}
+.beach-quick-actions button{
+  border:0;
+  border-radius:13px;
+  padding:10px 8px;
+  background:#f3f8fb;
+  color:var(--ink);
+  text-align:left;
+}
+.beach-quick-actions span{font-size:17px;display:block;margin-bottom:4px}
+.beach-quick-actions b{display:block;font-size:10px}
+.beach-quick-actions small{display:block;font-size:8px;color:var(--muted);margin-top:2px}
+
+.beach-overlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:5000;
+}
+.beach-overlay.show{display:block}
+.beach-overlay-backdrop{
+  position:absolute;
+  inset:0;
+  background:#0b203080;
+  backdrop-filter:blur(2px);
+}
+.beach-overlay-panel{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  margin:auto;
+  max-width:520px;
+  height:min(82dvh,720px);
+  background:#f5f8fb;
+  border-radius:22px 22px 0 0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  box-shadow:0 -8px 30px #0003;
+}
+.beach-overlay-header{
+  flex:0 0 auto;
+  padding:14px 16px;
+  background:white;
+  border-bottom:1px solid #e1e9ef;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.beach-overlay-header b,
+.beach-overlay-header small{display:block}
+.beach-overlay-header b{font-size:16px}
+.beach-overlay-header small{font-size:9px;color:var(--muted);margin-top:2px}
+.beach-overlay-header button{
+  width:36px;height:36px;border:0;border-radius:50%;
+  background:#eef3f6;font-size:16px;
+}
+.beach-overlay-content{
+  flex:1;
+  overflow:auto;
+  padding:12px;
+}
+.overlay-empty{
+  background:white;
+  border-radius:14px;
+  padding:18px;
+  color:var(--muted);
+  text-align:center;
+  font-size:10px;
+}
+.overlay-report-card{
+  background:white;
+  border-radius:14px;
+  padding:11px;
+  margin-bottom:9px;
+  box-shadow:0 2px 8px #16354b12;
+}
+.overlay-report-main b{display:block;font-size:11px;line-height:1.35}
+.overlay-report-main small{display:block;font-size:8px;color:var(--muted);margin-top:4px}
+
+/* Messenger/Viber-like beach chat */
+.messenger-chat{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+}
+.messenger-messages{
+  flex:1;
+  overflow:auto;
+  padding:4px 2px 12px;
+}
+.messenger-message{
+  max-width:82%;
+  margin:8px 0;
+}
+.messenger-message.mine{
+  margin-left:auto;
+}
+.messenger-meta{
+  font-size:7px;
+  color:var(--muted);
+  margin:0 5px 3px;
+}
+.messenger-message.mine .messenger-meta{text-align:right}
+.messenger-bubble{
+  background:white;
+  border-radius:15px 15px 15px 4px;
+  padding:10px 12px;
+  font-size:11px;
+  line-height:1.4;
+  box-shadow:0 2px 6px #00000012;
+  word-break:break-word;
+}
+.messenger-message.mine .messenger-bubble{
+  background:#dff1ff;
+  border-radius:15px 15px 4px 15px;
+}
+.messenger-compose{
+  flex:0 0 auto;
+  display:flex;
+  gap:7px;
+  padding:9px 0 4px;
+}
+.messenger-compose input{
+  flex:1;
+  min-width:0;
+  border:1px solid #d8e4ec;
+  border-radius:18px;
+  background:white;
+  padding:11px 13px;
+  font-size:11px;
+}
+.messenger-compose button{
+  width:42px;height:42px;
+  border:0;border-radius:50%;
+  background:var(--blue);color:white;
+  font-size:15px;font-weight:900;
+}
+.messenger-note{
+  flex:0 0 auto;
+  text-align:center;
+  font-size:7px;
+  color:var(--muted);
+  padding:3px 6px 2px;
+}
+
+/* Main beach popup can now be shorter */
+.sheet{max-height:min(58dvh,500px)}

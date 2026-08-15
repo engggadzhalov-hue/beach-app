@@ -231,6 +231,15 @@ function renderStatusInfo(b){
   const updated=s.updatedAt ? ` · обновено ${new Date(s.updatedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : '';
   const validUntil=s.updatedAt ? new Date(s.updatedAt+sourceTtlMs(s.source)).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : null;
 
+  const topStatus=document.getElementById('bs');
+  if(topStatus){
+    const sourceText=sourceLabel(s.source);
+    const mainText=s.source==='forecast'
+      ? `${s.flag==='green'?'🟢':s.flag==='yellow'?'🟡':'🔴'} ПРОГНОЗЕН СТАТУС`
+      : `${s.flag==='green'?'🟢 ЗЕЛЕН ФЛАГ':s.flag==='yellow'?'🟡 ЖЪЛТ ФЛАГ':'🔴 ЧЕРВЕН ФЛАГ'}`;
+    topStatus.textContent=`${mainText} · ${sourceText}`;
+  }
+
   box.innerHTML=`
     <div class="status-info-title">
       <span class="status-dot" style="background:${c(s.flag)}"></span>
@@ -626,7 +635,7 @@ async function renderLiveConditions(b){
 function selectBeach(b){
  selected=b;
  document.getElementById('bn').textContent=b.name;
- document.getElementById('bs').textContent=b.flag==='green'?'🟢 Зелен флаг':b.flag==='yellow'?'🟡 Жълт флаг':'🔴 Червен флаг';
+ document.getElementById('bs').textContent='Зареждане на актуален статус…';
  document.getElementById('score').textContent=b.score+'/100';
  document.getElementById('waves').textContent=b.waves;
  document.getElementById('water').textContent=b.water;
@@ -649,9 +658,8 @@ function selectBeach(b){
    if(sheet) sheet.insertBefore(live,actions||null);
  }
  renderLiveConditions(b);
- if(typeof renderBeachCommunityReports==='function') renderBeachCommunityReports(b);
  if(typeof renderCommunityConditionSummary==='function') renderCommunityConditionSummary(b);
- if(typeof renderBeachChat==='function') renderBeachChat(b);
+ if(typeof renderBeachQuickActions==='function') renderBeachQuickActions(b);
 }
 
 

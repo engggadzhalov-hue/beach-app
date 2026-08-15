@@ -53,7 +53,7 @@ async function initBeachFirebase(){
       .onSnapshot(snap=>{
         beachReports=snap.docs.map(d=>({id:d.id,...d.data()}));
         applyRealtimeCommunityStatuses();
-        if(typeof selected!=='undefined' && selected){ renderCommunityConditionSummary(selected); renderBeachCommunityReports(selected); }
+        if(typeof selected!=='undefined' && selected){ renderCommunityConditionSummary(selected); refreshOpenBeachOverlays(); }
       },err=>{
         console.error(err);
         beachFirebaseBadge('🟠 Community read error',false);
@@ -66,7 +66,7 @@ async function initBeachFirebase(){
       .onSnapshot(snap=>{
         beachConfirmations=snap.docs.map(d=>({id:d.id,...d.data()}));
         applyRealtimeCommunityStatuses();
-        if(typeof selected!=='undefined' && selected){ renderBeachCommunityReports(selected); renderCommunityConditionSummary(selected); }
+        if(typeof selected!=='undefined' && selected){ renderCommunityConditionSummary(selected); refreshOpenBeachOverlays(); }
       },err=>console.error('confirmations listener',err));
 
     if(chatUnsubscribe) chatUnsubscribe();
@@ -75,7 +75,7 @@ async function initBeachFirebase(){
       .limit(300)
       .onSnapshot(snap=>{
         beachChatMessages=snap.docs.map(d=>({id:d.id,...d.data()}));
-        if(typeof selected!=='undefined' && selected) renderBeachChat(selected);
+        if(typeof selected!=='undefined' && selected) refreshOpenBeachOverlays();
       },err=>console.error('chat listener',err));
 
   }catch(e){
@@ -342,6 +342,7 @@ async function sendBeachChatMessage(){
   });
 
   if(input) input.value='';
+  if(activeBeachOverlay==='chat') setTimeout(()=>renderChatOverlay(selected),150);
 }
 
 function renderBeachCommunityReports(b){
@@ -573,3 +574,161 @@ window.renderBeachCommunityReports = renderBeachCommunityReports;
 window.sendBeachChatMessage = sendBeachChatMessage;
 window.renderBeachChat = renderBeachChat;
 window.renderCommunityConditionSummary = renderCommunityConditionSummary;
+
+
+let activeBeachOverlay=null;
+
+function ensureBeachOverlay(){
+  let overlay=document.getElementById('beachOverlay');
+  if(overlay) return overlay;
+
+  overlay=document.createElement('div');
+  overlay.id='beachOverlay';
+  overlay.className='beach-overlay';
+  overlay.innerHTML=`
+    <div class="beach-overlay-backdrop" onclick="closeBeachOverlay()"></div>
+    <div class="beach-overlay-panel">
+      <div class="beach-overlay-header">
+        <div>
+          <b id="beachOverlayTitle"></b>
+          <small id="beachOverlaySubtitle"></small>
+        </div>
+        <button onclick="closeBeachOverlay()">✕</button>
+      </div>
+      <div class="beach-overlay-content" id="beachOverlayContent"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function closeBeachOverlay(){
+  const overlay=document.getElementById('beachOverlay');
+  if(overlay) overlay.classList.remove('show');
+  activeBeachOverlay=null;
+}
+
+function openBeachOverlay(type){
+  if(!selected) return;
+  const overlay=ensureBeachOverlay();
+  activeBeachOverlay=type;
+  overlay.classList.add('show');
+  refreshOpenBeachOverlays();
+}
+
+function refreshOpenBeachOverlays(){
+  if(!activeBeachOverlay || !selected) return;
+  if(activeBeachOverlay==='community') renderCommunityOverlay(selected);
+  if(activeBeachOverlay==='chat') renderChatOverlay(selected);
+}
+
+function renderBeachQuickActions(b){
+  const sheet=document.getElementById('sheet');
+  if(!sheet)return;
+
+  // Remove old inline detailed boxes if present.
+  document.getElementById('communityReportsBox')?.remove();
+  document.getElementById('beachChatBox')?.remove();
+
+  let box=document.getElementById('beachQuickActions');
+  if(!box){
+    box=document.createElement('div');
+    box.id='beachQuickActions';
+    box.className='beach-quick-actions';
+    const actions=sheet.querySelector('.actions');
+    sheet.insertBefore(box,actions||null);
+  }
+
+  const id=beachFirebaseId(b);
+  const recentReports=beachReports.filter(r=>r.beachId===id && r.type!=='newBeach' && reportAgeMs(r)<=6*60*60*1000).length;
+  const chatCount=chatMessagesForBeach(b).length;
+
+  box.innerHTML=`
+    <button onclick="openBeachOverlay('community')">
+      <span>👥</span>
+      <b>Community сигнали</b>
+      <small>${recentReports} пресни</small>
+    </button>
+    <button onclick="openBeachOverlay('chat')">
+      <span>💬</span>
+      <b>Чат на плажа</b>
+      <small>${chatCount} съобщения</small>
+    </button>`;
+}
+
+function renderCommunityOverlay(b){
+  ensureBeachOverlay();
+  document.getElementById('beachOverlayTitle').textContent='👥 Community сигнали';
+  document.getElementById('beachOverlaySubtitle').textContent=b.name;
+
+  const id=beachFirebaseId(b);
+  const items=beachReports
+    .filter(r=>r.beachId===id && r.type!=='newBeach' && reportAgeMs(r)<=6*60*60*1000)
+    .slice(0,30);
+
+  const content=document.getElementById('beachOverlayContent');
+
+  if(!items.length){
+    content.innerHTML='<div class="overlay-empty">Няма пресни community сигнали за този плаж.</div>';
+    return;
+  }
+
+  content.innerHTML=items.map(r=>{
+    const c=confirmationCounts(r.id);
+    const mine=myConfirmationFor(r.id);
+    const own=beachFirebaseUser && r.userId===beachFirebaseUser.uid;
+
+    return `<div class="overlay-report-card">
+      <div class="overlay-report-main">
+        <b>${reportSummary(r)}</b>
+        <small>${formatReportAge(r)} · ✅ ${c.confirm} · ⏱ ${c.outdated}</small>
+      </div>
+      <div class="community-vote-row">
+        <button ${own?'disabled':''} class="${mine?.value==='confirm'?'selected':''}"
+          onclick="voteOnReport('${r.id}','confirm')">✅ Потвърждавам</button>
+        <button ${own?'disabled':''} class="${mine?.value==='outdated'?'selected':''}"
+          onclick="voteOnReport('${r.id}','outdated')">⏱ Не е актуално</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderChatOverlay(b){
+  ensureBeachOverlay();
+  document.getElementById('beachOverlayTitle').textContent='💬 Чат на плажа';
+  document.getElementById('beachOverlaySubtitle').textContent=b.name;
+
+  const items=chatMessagesForBeach(b);
+  const content=document.getElementById('beachOverlayContent');
+
+  content.innerHTML=`
+    <div class="messenger-chat">
+      <div class="messenger-messages" id="overlayChatMessages">
+        ${items.length ? items.map(m=>{
+          const own=beachFirebaseUser && m.userId===beachFirebaseUser.uid;
+          return `<div class="messenger-message ${own?'mine':''}">
+            <div class="messenger-meta">${own?'Ти':chatAlias(m.userId)} · ${chatTime(m)}</div>
+            <div class="messenger-bubble">${escapeHtml(m.text||'')}</div>
+          </div>`;
+        }).join('') : '<div class="overlay-empty">Няма съобщения. Попитай някого как е на плажа.</div>'}
+      </div>
+
+      <div class="messenger-compose">
+        <input id="chatInput" maxlength="300" placeholder="Напиши съобщение…">
+        <button onclick="sendBeachChatMessage()">➤</button>
+      </div>
+      <div class="messenger-note">Публична временна стая за този плаж. Не споделяй лични данни.</div>
+    </div>`;
+
+  setTimeout(()=>{
+    const el=document.getElementById('overlayChatMessages');
+    if(el)el.scrollTop=el.scrollHeight;
+  },0);
+}
+
+// Override old inline renderers so they no longer add content to the main beach sheet.
+function renderBeachCommunityReports(b){ renderBeachQuickActions(b); }
+function renderBeachChat(b){ renderBeachQuickActions(b); }
+
+window.openBeachOverlay=openBeachOverlay;
+window.closeBeachOverlay=closeBeachOverlay;
+window.renderBeachQuickActions=renderBeachQuickActions;
