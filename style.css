@@ -111,3 +111,21 @@ nav button.active-nav{color:var(--blue);font-weight:800}
 
 /* v1.6 compact map detail markers + playful ranks */
 .rank-tagline{font-size:11px;color:var(--muted);margin-top:-2px;margin-bottom:8px;font-weight:700}
+
+/* v2.1 grouped beach segments */
+.coordinate-info{
+  font-size:10px;color:var(--muted);background:#f7f9fb;border-radius:10px;
+  padding:8px 10px;margin:0 0 9px;line-height:1.35
+}
+
+
+/* v2.3 live marine/weather conditions */
+.live-conditions{margin:0 0 10px;padding:11px;background:#f7fbff;border:1px solid #dceefb;border-radius:14px}
+.live-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.live-badge{font-size:9px;font-weight:900;padding:3px 6px;border-radius:999px;background:#e8f7ef}
+.live-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:8px 0}
+.live-grid div{background:#fff;border-radius:10px;padding:7px 4px;text-align:center;box-shadow:0 1px 4px #0000000d}
+.live-grid b{display:block;font-size:12px}
+.live-grid span{display:block;font-size:8px;color:var(--muted);margin-top:2px}
+.live-conditions small{font-size:8px;color:var(--muted)}
+.safety-note{font-size:9px;line-height:1.35;margin-top:8px;padding:7px 8px;background:#fff5d9;border-radius:9px}

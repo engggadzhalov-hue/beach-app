@@ -1,7 +1,70 @@
-let map,selected,userMarker=null,accuracyCircle=null,watchId=null,userPos=null,lifeguardMarkers=[],beachMarkers=[];
+let map,selected,userMarker=null,accuracyCircle=null,watchId=null,userPos=null,lifeguardMarkers=[],beachMarkers=[],beachGroupMarkers=[],liveConditions=new Map();
 let currentPanel = 'map';
 
 function c(f){return f==='green'?'#22b66f':f==='yellow'?'#f3b933':'#e94f4a'}
+
+function flagRank(flag){return flag==='red'?3:flag==='yellow'?2:1}
+function worstFlag(items){
+  return [...items].sort((a,b)=>flagRank(b.flag)-flagRank(a.flag))[0]?.flag||'green';
+}
+
+function renderBeachMarkers(){
+  beachMarkers.forEach(x=>x.marker.setMap(null));
+  beachGroupMarkers.forEach(x=>x.marker.setMap(null));
+  beachMarkers=[];
+  beachGroupMarkers=[];
+
+  beaches.forEach(b=>{
+    const labelText=b.flag==='green'?'З':b.flag==='yellow'?'Ж':'Ч';
+    const m=new google.maps.Marker({
+      position:{lat:b.lat,lng:b.lng},
+      map,
+      title:`${b.name} · ${b.flag==='green'?'Зелен':b.flag==='yellow'?'Жълт':'Червен'} флаг`,
+      label:{text:labelText,color:'#ffffff',fontSize:'9px',fontWeight:'900'},
+      icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:c(b.flag),fillOpacity:1,strokeColor:'#ffffff',strokeWeight:2},
+      zIndex:500
+    });
+    m.addListener('click',()=>selectBeach(b));
+    beachMarkers.push({beach:b,marker:m});
+  });
+
+  const groups={};
+  beaches.filter(b=>b.group).forEach(b=>(groups[b.group]??=[]).push(b));
+
+  Object.entries(groups).forEach(([group,items])=>{
+    if(items.length<2)return;
+    const lat=items.reduce((s,x)=>s+x.lat,0)/items.length;
+    const lng=items.reduce((s,x)=>s+x.lng,0)/items.length;
+    const flag=worstFlag(items);
+    const m=new google.maps.Marker({
+      position:{lat,lng},
+      map:null,
+      title:`${group} · ${items.length} участъка`,
+      label:{text:String(items.length),color:'#ffffff',fontSize:'9px',fontWeight:'900'},
+      icon:{path:google.maps.SymbolPath.CIRCLE,scale:12,fillColor:c(flag),fillOpacity:1,strokeColor:'#ffffff',strokeWeight:2.5},
+      zIndex:540
+    });
+    m.addListener('click',()=>{
+      map.setCenter({lat,lng});
+      map.setZoom(Math.max(12,map.getZoom()+2));
+    });
+    beachGroupMarkers.push({group,items,marker:m});
+  });
+
+  updateBeachMarkerVisibility();
+  map.addListener('zoom_changed',updateBeachMarkerVisibility);
+}
+
+function updateBeachMarkerVisibility(){
+  const zoom=map?.getZoom()||0;
+  const groupedNames=new Set(beachGroupMarkers.flatMap(g=>g.items.map(x=>x.name)));
+
+  beachMarkers.forEach(({beach,marker})=>{
+    const isGrouped=groupedNames.has(beach.name);
+    marker.setVisible(zoom>=7 && (!isGrouped || zoom>=11));
+  });
+  beachGroupMarkers.forEach(({marker})=>marker.setMap(zoom>=7 && zoom<11?map:null));
+}
 
 function initMap(){
   map=new google.maps.Map(document.getElementById('map'),{
@@ -13,31 +76,7 @@ function initMap(){
     gestureHandling:'greedy'
   });
 
-  beaches.forEach(b=>{
-    const labelText=b.flag==='green'?'З':b.flag==='yellow'?'Ж':'Ч';
-    const m=new google.maps.Marker({
-      position:{lat:b.lat,lng:b.lng},
-      map,
-      title:`${b.name} · ${b.flag==='green'?'Зелен':b.flag==='yellow'?'Жълт':'Червен'} флаг`,
-      label:{
-        text:labelText,
-        color:'#ffffff',
-        fontSize:'9px',
-        fontWeight:'900'
-      },
-      icon:{
-        path:google.maps.SymbolPath.CIRCLE,
-        scale:9,
-        fillColor:c(b.flag),
-        fillOpacity:1,
-        strokeColor:'#ffffff',
-        strokeWeight:2
-      },
-      zIndex:500
-    });
-    m.addListener('click',()=>selectBeach(b));
-    beachMarkers.push(m);
-  });
+  renderBeachMarkers();
 
   map.addListener('click',closeBeachSheet);
   setupNavigation();
@@ -136,7 +175,7 @@ function updateDetailMarkerVisibility(){
   });
 
   // Beach flag dots stay visible at all normal map zooms.
-  beachMarkers.forEach(m=>m.setVisible(zoom>=7));
+  updateBeachMarkerVisibility();
 }
 
 function startOfficialPostCorrection(beachName,postNo){
@@ -191,6 +230,92 @@ function refreshSelectedDistance(){
  }
 }
 
+
+function nearestHourlyIndex(times){
+  if(!times?.length)return 0;
+  const now=Date.now();
+  let best=0,dist=Infinity;
+  times.forEach((t,i)=>{
+    const d=Math.abs(new Date(t).getTime()-now);
+    if(d<dist){dist=d;best=i}
+  });
+  return best;
+}
+
+function beachKey(b){return `${b.lat.toFixed(4)},${b.lng.toFixed(4)}`}
+
+async function fetchLiveConditions(b){
+  const key=beachKey(b);
+  const cached=liveConditions.get(key);
+  if(cached && Date.now()-cached.fetchedAt<30*60*1000)return cached;
+
+  const lat=b.lat, lon=b.lng;
+  const weatherUrl=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,uv_index,precipitation&forecast_days=2&timezone=auto`;
+  const marineUrl=`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=wave_height,wave_direction,wave_period,sea_surface_temperature&forecast_days=2&timezone=auto`;
+
+  const [wr,mr]=await Promise.all([fetch(weatherUrl),fetch(marineUrl)]);
+  if(!wr.ok||!mr.ok)throw new Error('live data unavailable');
+  const [w,m]=await Promise.all([wr.json(),mr.json()]);
+  const wi=nearestHourlyIndex(w.hourly?.time);
+  const mi=nearestHourlyIndex(m.hourly?.time);
+
+  const data={
+    air:w.hourly?.temperature_2m?.[wi],
+    wind:w.hourly?.wind_speed_10m?.[wi],
+    gust:w.hourly?.wind_gusts_10m?.[wi],
+    uv:w.hourly?.uv_index?.[wi],
+    rain:w.hourly?.precipitation?.[wi],
+    wave:m.hourly?.wave_height?.[mi],
+    waveDirection:m.hourly?.wave_direction?.[mi],
+    wavePeriod:m.hourly?.wave_period?.[mi],
+    water:m.hourly?.sea_surface_temperature?.[mi],
+    fetchedAt:Date.now(),
+    source:'Open-Meteo'
+  };
+  liveConditions.set(key,data);
+  return data;
+}
+
+function beachScoreFromLive(d){
+  let score=100;
+  if(Number.isFinite(d.wave)) score-=Math.max(0,d.wave-.25)*22;
+  if(Number.isFinite(d.wind)) score-=Math.max(0,d.wind-12)*0.75;
+  if(Number.isFinite(d.gust)) score-=Math.max(0,d.gust-22)*0.35;
+  if(Number.isFinite(d.uv) && d.uv>=8) score-=6;
+  if(Number.isFinite(d.rain)) score-=Math.min(15,d.rain*4);
+  if(Number.isFinite(d.water) && d.water<20) score-=8;
+  return Math.max(0,Math.min(100,Math.round(score)));
+}
+
+function fmt(v,suffix=''){return Number.isFinite(v)?`${Math.round(v*10)/10}${suffix}`:'—'}
+
+async function renderLiveConditions(b){
+  const box=document.getElementById('liveConditions');
+  if(!box)return;
+  box.innerHTML='<b>🌊 Условия сега</b><p>Зареждане на актуални морски и метеорологични данни…</p>';
+  try{
+    const d=await fetchLiveConditions(b);
+    if(selected!==b)return;
+    const score=beachScoreFromLive(d);
+    box.innerHTML=`
+      <div class="live-title"><b>🌊 Условия сега</b><span class="live-badge">LIVE</span></div>
+      <div class="live-grid">
+        <div><b>${fmt(d.wave,' m')}</b><span>Вълни</span></div>
+        <div><b>${fmt(d.wavePeriod,' s')}</b><span>Период</span></div>
+        <div><b>${fmt(d.wind,' km/h')}</b><span>Вятър</span></div>
+        <div><b>${fmt(d.gust,' km/h')}</b><span>Пориви</span></div>
+        <div><b>${fmt(d.water,'°C')}</b><span>Вода</span></div>
+        <div><b>${fmt(d.air,'°C')}</b><span>Въздух</span></div>
+        <div><b>${fmt(d.uv)}</b><span>UV</span></div>
+        <div><b>${score}/100</b><span>Условия</span></div>
+      </div>
+      <small>Автоматични моделни данни · Open-Meteo · обновяване до 30 мин.</small>
+      <div class="safety-note">🚩 Цветният флаг на картата НЕ се променя автоматично от прогнозата. Флагът трябва да идва от спасител/проверен източник/community потвърждение.</div>`;
+  }catch(e){
+    box.innerHTML='<b>🌊 Условия сега</b><p>В момента не успяхме да заредим live данните. Показанията за флаг остават отделни.</p>';
+  }
+}
+
 function selectBeach(b){
  selected=b;
  document.getElementById('bn').textContent=b.name;
@@ -203,6 +328,17 @@ function selectBeach(b){
  map.panTo({lat:b.lat,lng:b.lng});
  refreshSelectedDistance();
  renderLifeguardInfo(b);
+ renderCoordinateInfo(b);
+ let live=document.getElementById('liveConditions');
+ if(!live){
+   live=document.createElement('div');
+   live.id='liveConditions';
+   live.className='live-conditions';
+   const sheet=document.getElementById('sheet');
+   const actions=sheet?.querySelector('.actions');
+   if(sheet) sheet.insertBefore(live,actions||null);
+ }
+ renderLiveConditions(b);
 }
 
 
@@ -236,6 +372,22 @@ function openLifeguardCorrection(){
    const msg=document.getElementById('reportMessage');
    if(msg) msg.textContent=`Корекция за: ${beachName}`;
  },30);
+}
+
+
+function renderCoordinateInfo(b){
+ const sheet=document.getElementById('sheet');
+ if(!sheet)return;
+ let box=document.getElementById('coordinateInfo');
+ if(!box){
+   box=document.createElement('div');
+   box.id='coordinateInfo';
+   box.className='coordinate-info';
+   const lg=document.getElementById('lifeguardInfo');
+   sheet.insertBefore(box,lg||sheet.querySelector('.actions'));
+ }
+ const label=b.coordinateStatus==='official'?'Официална точка':b.coordinateStatus==='verified'?'Проверена точка':'За допълнителна проверка';
+ box.innerHTML=`📌 ${label}${b.coordinateSource?` · ${b.coordinateSource}`:''}${b.segment?` · участък: ${b.segment}`:''}`;
 }
 
 function updateUserLocation(p,center=false){
