@@ -4,6 +4,9 @@ let beachFirebaseUser = null;
 let beachReports = [];
 let beachConfirmations = [];
 let confirmationsUnsubscribe = null;
+let beachChatMessages = [];
+let chatUnsubscribe = null;
+let lastChatSentAt = 0;
 
 function beachFirebaseId(b){
   return (b.name||'').toLowerCase()
@@ -50,6 +53,7 @@ async function initBeachFirebase(){
       .onSnapshot(snap=>{
         beachReports=snap.docs.map(d=>({id:d.id,...d.data()}));
         applyRealtimeCommunityStatuses();
+        if(typeof selected!=='undefined' && selected){ renderCommunityConditionSummary(selected); renderBeachCommunityReports(selected); }
       },err=>{
         console.error(err);
         beachFirebaseBadge('🟠 Community read error',false);
@@ -62,8 +66,17 @@ async function initBeachFirebase(){
       .onSnapshot(snap=>{
         beachConfirmations=snap.docs.map(d=>({id:d.id,...d.data()}));
         applyRealtimeCommunityStatuses();
-        if(typeof selected!=='undefined' && selected) renderBeachCommunityReports(selected);
+        if(typeof selected!=='undefined' && selected){ renderBeachCommunityReports(selected); renderCommunityConditionSummary(selected); }
       },err=>console.error('confirmations listener',err));
+
+    if(chatUnsubscribe) chatUnsubscribe();
+    chatUnsubscribe = beachFirebaseDb.collection('chat_messages')
+      .orderBy('createdAt','desc')
+      .limit(300)
+      .onSnapshot(snap=>{
+        beachChatMessages=snap.docs.map(d=>({id:d.id,...d.data()}));
+        if(typeof selected!=='undefined' && selected) renderBeachChat(selected);
+      },err=>console.error('chat listener',err));
 
   }catch(e){
     console.error(e);
@@ -138,6 +151,197 @@ function reportSummary(r){
   if(r.crowd) parts.push(`👥 ${r.crowd==='quiet'?'спокойно':r.crowd==='medium'?'средно':'претъпкано'}`);
   if(r.lifeguardCorrection) parts.push(`🛟 ${r.lifeguardCorrection}`);
   return parts.join(' · ') || r.type;
+}
+
+
+function weightedCommunityValue(b,field){
+  const id=beachFirebaseId(b);
+  const maxAge = field==='crowd' ? 90*60*1000 : 3*60*60*1000;
+
+  const items=beachReports.filter(r =>
+    r.beachId===id &&
+    r.type==='conditions' &&
+    r[field] &&
+    reportAgeMs(r)<=maxAge
+  );
+
+  if(!items.length) return {value:null,count:0,confidence:0};
+
+  const scores={};
+  let totalWeight=0;
+
+  items.forEach(r=>{
+    const weight=reportWeightFromConfirmations(r);
+    const value=r[field];
+    scores[value]=(scores[value]||0)+weight;
+    totalWeight+=weight;
+  });
+
+  const sorted=Object.entries(scores).sort((a,b)=>b[1]-a[1]);
+  const [value,topWeight]=sorted[0];
+  const confidence=totalWeight>0 ? Math.round((topWeight/totalWeight)*100) : 0;
+
+  return {value,count:items.length,confidence};
+}
+
+function communityLabel(field,value){
+  const labels={
+    jellyfish:{none:'Няма',low:'Малко',high:'Много'},
+    seaweed:{none:'Няма',low:'Малко',high:'Много'},
+    crowd:{quiet:'Спокойно',medium:'Средно',packed:'Претъпкано'}
+  };
+  return labels[field]?.[value] || 'Няма данни';
+}
+
+function renderCommunityConditionSummary(b){
+  const sheet=document.getElementById('sheet');
+  if(!sheet) return;
+
+  let box=document.getElementById('communityConditionSummary');
+  if(!box){
+    box=document.createElement('div');
+    box.id='communityConditionSummary';
+    box.className='community-condition-summary';
+
+    const live=document.getElementById('liveConditions');
+    if(live && live.parentNode){
+      live.parentNode.insertBefore(box,live.nextSibling);
+    }else{
+      const actions=sheet.querySelector('.actions');
+      sheet.insertBefore(box,actions||null);
+    }
+  }
+
+  const jelly=weightedCommunityValue(b,'jellyfish');
+  const seaweed=weightedCommunityValue(b,'seaweed');
+  const crowd=weightedCommunityValue(b,'crowd');
+
+  box.innerHTML=`
+    <div class="community-summary-title">👥 От хората на плажа</div>
+    <div class="community-summary-grid">
+      <div>
+        <span>🪼 Медузи</span>
+        <b>${communityLabel('jellyfish',jelly.value)}</b>
+        <small>${jelly.count ? `${jelly.count} сигнала · ${jelly.confidence}%` : 'няма пресни сигнали'}</small>
+      </div>
+      <div>
+        <span>🌿 Водорасли</span>
+        <b>${communityLabel('seaweed',seaweed.value)}</b>
+        <small>${seaweed.count ? `${seaweed.count} сигнала · ${seaweed.confidence}%` : 'няма пресни сигнали'}</small>
+      </div>
+      <div>
+        <span>👥 Натовареност</span>
+        <b>${communityLabel('crowd',crowd.value)}</b>
+        <small>${crowd.count ? `${crowd.count} сигнала · ${crowd.confidence}%` : 'няма пресни сигнали'}</small>
+      </div>
+    </div>
+  `;
+}
+
+function chatAlias(uid){
+  if(!uid) return 'Плажар';
+  return `Плажар ${uid.slice(-4).toUpperCase()}`;
+}
+
+function chatMessagesForBeach(b){
+  const id=beachFirebaseId(b);
+  return beachChatMessages
+    .filter(m=>m.beachId===id)
+    .sort((a,b)=>{
+      const at=a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+      const bt=b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+      return at-bt;
+    })
+    .slice(-40);
+}
+
+function chatTime(m){
+  const d=m.createdAt?.toDate ? m.createdAt.toDate() : null;
+  return d ? d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : 'сега';
+}
+
+function renderBeachChat(b){
+  const sheet=document.getElementById('sheet');
+  if(!sheet) return;
+
+  let box=document.getElementById('beachChatBox');
+  if(!box){
+    box=document.createElement('div');
+    box.id='beachChatBox';
+    box.className='beach-chat-box';
+
+    const actions=sheet.querySelector('.actions');
+    sheet.insertBefore(box,actions||null);
+  }
+
+  const items=chatMessagesForBeach(b);
+
+  box.innerHTML=`
+    <div class="chat-head">
+      <div>
+        <b>💬 Чат на плажа</b>
+        <small>${b.name}</small>
+      </div>
+      <span>${items.length} съобщения</span>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+      ${items.length ? items.map(m=>{
+        const own=beachFirebaseUser && m.userId===beachFirebaseUser.uid;
+        return `<div class="chat-message ${own?'mine':''}">
+          <div class="chat-meta">${own?'Ти':chatAlias(m.userId)} · ${chatTime(m)}</div>
+          <div class="chat-text">${escapeHtml(m.text||'')}</div>
+        </div>`;
+      }).join('') : '<div class="chat-empty">Няма съобщения. Попитай някого как е на плажа.</div>'}
+    </div>
+
+    <div class="chat-compose">
+      <input id="chatInput" maxlength="300" placeholder="Напр. Има ли медузи при пост 2?">
+      <button onclick="sendBeachChatMessage()">Изпрати</button>
+    </div>
+    <div class="chat-note">Публична временна стая за този плаж. Не споделяй лични данни.</div>
+  `;
+
+  setTimeout(()=>{
+    const el=document.getElementById('chatMessages');
+    if(el) el.scrollTop=el.scrollHeight;
+  },0);
+}
+
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+async function sendBeachChatMessage(){
+  if(!beachFirebaseDb || !beachFirebaseUser || !selected) return;
+
+  const input=document.getElementById('chatInput');
+  const text=(input?.value||'').trim();
+
+  if(text.length<1) return;
+  if(text.length>300) return;
+
+  const now=Date.now();
+  if(now-lastChatSentAt<3000){
+    alert('Изчакай няколко секунди преди следващото съобщение.');
+    return;
+  }
+  lastChatSentAt=now;
+
+  await beachFirebaseDb.collection('chat_messages').add({
+    userId:beachFirebaseUser.uid,
+    beachId:beachFirebaseId(selected),
+    beachName:selected.name,
+    text,
+    createdAt:firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  if(input) input.value='';
 }
 
 function renderBeachCommunityReports(b){
@@ -365,3 +569,7 @@ window.addEventListener('load',()=>setTimeout(initBeachFirebase,500));
 
 window.voteOnReport = voteOnReport;
 window.renderBeachCommunityReports = renderBeachCommunityReports;
+
+window.sendBeachChatMessage = sendBeachChatMessage;
+window.renderBeachChat = renderBeachChat;
+window.renderCommunityConditionSummary = renderCommunityConditionSummary;

@@ -650,6 +650,8 @@ function selectBeach(b){
  }
  renderLiveConditions(b);
  if(typeof renderBeachCommunityReports==='function') renderBeachCommunityReports(b);
+ if(typeof renderCommunityConditionSummary==='function') renderCommunityConditionSummary(b);
+ if(typeof renderBeachChat==='function') renderBeachChat(b);
 }
 
 
