@@ -182,3 +182,6 @@ nav button.active-nav{color:var(--blue);font-weight:800}
   .live-grid{grid-template-columns:repeat(4,1fr)}
   .live-conditions,.status-info,.lifeguard-info{padding:8px}
 }
+
+.firebase-status-badge{margin-left:auto;margin-right:8px;padding:4px 7px;border-radius:999px;background:#eef8f2;color:#26764e;font-size:9px;font-weight:900;white-space:nowrap}
+.firebase-status-badge.offline{background:#fff2df;color:#9a5a00}
