@@ -1,4 +1,4 @@
-let map,selected,userMarker=null,accuracyCircle=null,watchId=null,userPos=null,lifeguardMarkers=[],beachMarkers=[],beachGroupMarkers=[],liveConditions=new Map();
+let map,selected,userMarker=null,accuracyCircle=null,watchId=null,userPos=null,lifeguardMarkers=[],beachMarkers=[],beachGroupMarkers=[],liveConditions=new Map(),dynamicStatuses=new Map();
 let currentPanel = 'map';
 
 function c(f){return f==='green'?'#22b66f':f==='yellow'?'#f3b933':'#e94f4a'}
@@ -8,6 +8,218 @@ function worstFlag(items){
   return [...items].sort((a,b)=>flagRank(b.flag)-flagRank(a.flag))[0]?.flag||'green';
 }
 
+
+function localHour(){
+  return new Date().getHours();
+}
+
+function predictionFlagFromLive(d){
+  // Conservative prototype thresholds. These are NOT official bathing rules.
+  const wave = Number.isFinite(d?.wave) ? d.wave : 0;
+  const wind = Number.isFinite(d?.wind) ? d.wind : 0;
+  const gust = Number.isFinite(d?.gust) ? d.gust : 0;
+
+  if(wave >= 1.4 || wind >= 35 || gust >= 50) return 'red';
+  if(wave >= 0.7 || wind >= 22 || gust >= 35) return 'yellow';
+  return 'green';
+}
+
+function sourcePriority(source){
+  return {
+    lifeguard: 100,
+    camera: 80,
+    community: 60,
+    forecast: 20,
+    fallback: 10
+  }[source] || 0;
+}
+
+function sourceIcon(source){
+  return {
+    lifeguard:'🛟',
+    camera:'📷',
+    community:'👥',
+    forecast:'~',
+    fallback:'?'
+  }[source] || '?';
+}
+
+function sourceLabel(source){
+  return {
+    lifeguard:'Спасител',
+    camera:'Камера',
+    community:'Community',
+    forecast:'Прогноза',
+    fallback:'Непотвърден'
+  }[source] || 'Непотвърден';
+}
+
+function getBeachDynamicStatus(b){
+  const saved = dynamicStatuses.get(beachKey(b));
+  if(saved) return saved;
+
+  return {
+    flag:b.flag || 'green',
+    source:'fallback',
+    confidence:25,
+    updatedAt:null,
+    reason:'Няма по-надежден актуален източник.'
+  };
+}
+
+function setBeachDynamicStatus(b,status){
+  const key=beachKey(b);
+  const current=getBeachDynamicStatus(b);
+
+  // Higher-priority sources replace lower-priority ones.
+  // Same source may update itself if newer.
+  if(
+    sourcePriority(status.source) > sourcePriority(current.source) ||
+    status.source === current.source ||
+    current.source === 'fallback'
+  ){
+    dynamicStatuses.set(key,{
+      ...status,
+      updatedAt:status.updatedAt || Date.now()
+    });
+    updateOneBeachMarker(b);
+    refreshGroupMarkers();
+    if(selected===b) renderStatusInfo(b);
+  }
+}
+
+function useForecastAsStatus(b,d){
+  const current=getBeachDynamicStatus(b);
+  const hour=localHour();
+
+  // Forecast is especially useful in the early morning.
+  // Later it remains fallback only if no stronger source exists.
+  const canUseForecast =
+    current.source === 'fallback' ||
+    current.source === 'forecast';
+
+  if(!canUseForecast) return;
+
+  const flag=predictionFlagFromLive(d);
+  let confidence= hour < 9 ? 70 : 55;
+
+  setBeachDynamicStatus(b,{
+    flag,
+    source:'forecast',
+    confidence,
+    reason:`Автоматично от вълни ${fmt(d.wave,' m')}, вятър ${fmt(d.wind,' km/h')} и пориви ${fmt(d.gust,' km/h')}.`
+  });
+}
+
+function demoOfficialStatus(b,flag){
+  setBeachDynamicStatus(b,{
+    flag,
+    source:'lifeguard',
+    confidence:100,
+    reason:'Потвърдено от спасител.'
+  });
+}
+
+function demoCameraStatus(b,flag,confidence=85){
+  setBeachDynamicStatus(b,{
+    flag,
+    source:'camera',
+    confidence,
+    reason:'Разпознато от проверена камера.'
+  });
+}
+
+function demoCommunityStatus(b,flag,count=5){
+  const confidence=Math.min(90,55+count*3);
+  setBeachDynamicStatus(b,{
+    flag,
+    source:'community',
+    confidence,
+    reason:`${count} съвпадащи сигнала от потребители.`
+  });
+}
+
+function markerVisualForStatus(status){
+  const flag=status.flag;
+  const letter=flag==='green'?'З':flag==='yellow'?'Ж':'Ч';
+  const src=sourceIcon(status.source);
+  return {flag,letter,src};
+}
+
+function updateOneBeachMarker(b){
+  const entry=beachMarkers.find(x=>x.beach===b);
+  if(!entry) return;
+
+  const status=getBeachDynamicStatus(b);
+  const visual=markerVisualForStatus(status);
+
+  entry.marker.setIcon({
+    path:google.maps.SymbolPath.CIRCLE,
+    scale:9,
+    fillColor:c(visual.flag),
+    fillOpacity:1,
+    strokeColor:'#ffffff',
+    strokeWeight:2
+  });
+
+  entry.marker.setLabel({
+    text:visual.letter,
+    color:'#ffffff',
+    fontSize:'9px',
+    fontWeight:'900'
+  });
+
+  entry.marker.setTitle(
+    `${b.name} · ${visual.flag==='green'?'Зелен':visual.flag==='yellow'?'Жълт':'Червен'} · ${sourceLabel(status.source)}`
+  );
+}
+
+function refreshGroupMarkers(){
+  beachGroupMarkers.forEach(({group,items,marker})=>{
+    const statuses=items.map(getBeachDynamicStatus);
+    const worst=[...statuses].sort((a,b)=>flagRank(b.flag)-flagRank(a.flag))[0] || {flag:'green'};
+    marker.setIcon({
+      path:google.maps.SymbolPath.CIRCLE,
+      scale:12,
+      fillColor:c(worst.flag),
+      fillOpacity:1,
+      strokeColor:'#ffffff',
+      strokeWeight:2.5
+    });
+  });
+}
+
+function renderStatusInfo(b){
+  const sheet=document.getElementById('sheet');
+  if(!sheet)return;
+
+  let box=document.getElementById('statusInfo');
+  if(!box){
+    box=document.createElement('div');
+    box.id='statusInfo';
+    box.className='status-info';
+    const live=document.getElementById('liveConditions');
+    sheet.insertBefore(box,live || sheet.querySelector('.actions'));
+  }
+
+  const s=getBeachDynamicStatus(b);
+  const flagText=s.flag==='green'?'ЗЕЛЕН':s.flag==='yellow'?'ЖЪЛТ':'ЧЕРВЕН';
+  const updated=s.updatedAt ? ` · обновено ${new Date(s.updatedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : '';
+
+  box.innerHTML=`
+    <div class="status-info-title">
+      <span class="status-dot" style="background:${c(s.flag)}"></span>
+      <b>${flagText}</b>
+      <span class="status-source">${sourceIcon(s.source)} ${sourceLabel(s.source)}</span>
+    </div>
+    <div class="status-confidence">Достоверност: <b>${s.confidence}%</b>${updated}</div>
+    <div class="status-reason">${s.reason || ''}</div>
+    ${s.source==='forecast'
+      ? '<div class="forecast-warning">Прогнозен статус — не е официален спасителен флаг.</div>'
+      : ''}
+  `;
+}
+
 function renderBeachMarkers(){
   beachMarkers.forEach(x=>x.marker.setMap(null));
   beachGroupMarkers.forEach(x=>x.marker.setMap(null));
@@ -15,13 +227,14 @@ function renderBeachMarkers(){
   beachGroupMarkers=[];
 
   beaches.forEach(b=>{
-    const labelText=b.flag==='green'?'З':b.flag==='yellow'?'Ж':'Ч';
+    const initialStatus=getBeachDynamicStatus(b);
+    const visual=markerVisualForStatus(initialStatus);
     const m=new google.maps.Marker({
       position:{lat:b.lat,lng:b.lng},
       map,
-      title:`${b.name} · ${b.flag==='green'?'Зелен':b.flag==='yellow'?'Жълт':'Червен'} флаг`,
-      label:{text:labelText,color:'#ffffff',fontSize:'9px',fontWeight:'900'},
-      icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:c(b.flag),fillOpacity:1,strokeColor:'#ffffff',strokeWeight:2},
+      title:`${b.name} · ${sourceLabel(initialStatus.source)}`,
+      label:{text:visual.letter,color:'#ffffff',fontSize:'9px',fontWeight:'900'},
+      icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:c(visual.flag),fillOpacity:1,strokeColor:'#ffffff',strokeWeight:2},
       zIndex:500
     });
     m.addListener('click',()=>selectBeach(b));
@@ -35,7 +248,8 @@ function renderBeachMarkers(){
     if(items.length<2)return;
     const lat=items.reduce((s,x)=>s+x.lat,0)/items.length;
     const lng=items.reduce((s,x)=>s+x.lng,0)/items.length;
-    const flag=worstFlag(items);
+    const statuses=items.map(getBeachDynamicStatus);
+    const flag=[...statuses].sort((a,b)=>flagRank(b.flag)-flagRank(a.flag))[0]?.flag||'green';
     const m=new google.maps.Marker({
       position:{lat,lng},
       map:null,
@@ -297,6 +511,7 @@ async function renderLiveConditions(b){
     const d=await fetchLiveConditions(b);
     if(selected!==b)return;
     const score=beachScoreFromLive(d);
+    useForecastAsStatus(b,d);
     box.innerHTML=`
       <div class="live-title"><b>🌊 Условия сега</b><span class="live-badge">LIVE</span></div>
       <div class="live-grid">
@@ -329,6 +544,7 @@ function selectBeach(b){
  refreshSelectedDistance();
  renderLifeguardInfo(b);
  renderCoordinateInfo(b);
+ renderStatusInfo(b);
  let live=document.getElementById('liveConditions');
  if(!live){
    live=document.createElement('div');
@@ -623,6 +839,24 @@ function renderReportPanel(){
    </div>`;
  renderReportTypeFields();
 }
+
+function applyPrototypeStatusSource(){
+  const beachIndex=Number(document.getElementById('reportBeachSelect')?.value);
+  const b=beaches[beachIndex];
+  if(!b)return;
+
+  const src=document.getElementById('prototypeSource')?.value;
+  const flag=document.getElementById('prototypeFlag')?.value;
+  if(!src || !flag)return;
+
+  if(src==='lifeguard') demoOfficialStatus(b,flag);
+  if(src==='camera') demoCameraStatus(b,flag,88);
+  if(src==='community') demoCommunityStatus(b,flag,7);
+
+  const msg=document.getElementById('reportMessage');
+  if(msg)msg.textContent=`✅ Тестов статус: ${sourceLabel(src)} → ${flag}. Кръгчето на картата е обновено.`;
+}
+
 function renderReportTypeFields(){
  const type=document.getElementById('reportType')?.value||'conditions';
  const box=document.getElementById('reportTypeFields');
@@ -636,7 +870,22 @@ function renderReportTypeFields(){
        <button onclick="choose(this)">↔️ Постът е преместен</button>
        <button onclick="choose(this)">⚠️ Това е неохраняема зона</button>
      </div>
-     <div class="gps-evidence">📍 В реалната версия към сигнала ще записваме GPS позицията на подателя и по желание снимка.</div>`;
+     <div class="gps-evidence">📍 В реалната версия към сигнала ще записваме GPS позицията на подателя и по желание снимка.</div>
+     <div class="prototype-status-test">
+       <b>Тест на приоритета на статуса</b>
+       <small>Само за прототипа — симулира по-надежден източник.</small>
+       <select id="prototypeSource">
+         <option value="lifeguard">🛟 Спасител</option>
+         <option value="camera">📷 Камера</option>
+         <option value="community">👥 Community</option>
+       </select>
+       <select id="prototypeFlag">
+         <option value="green">🟢 Зелен</option>
+         <option value="yellow">🟡 Жълт</option>
+         <option value="red">🔴 Червен</option>
+       </select>
+       <button type="button" onclick="applyPrototypeStatusSource()">Приложи тестов статус</button>
+     </div>`;
  }else{
    box.innerHTML=`
      <label>🚩 Флаг</label><div class="choice-row"><button onclick="choose(this)">🟢 Зелен</button><button onclick="choose(this)">🟡 Жълт</button><button onclick="choose(this)">🔴 Червен</button></div>

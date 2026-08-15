@@ -129,3 +129,21 @@ nav button.active-nav{color:var(--blue);font-weight:800}
 .live-grid span{display:block;font-size:8px;color:var(--muted);margin-top:2px}
 .live-conditions small{font-size:8px;color:var(--muted)}
 .safety-note{font-size:9px;line-height:1.35;margin-top:8px;padding:7px 8px;background:#fff5d9;border-radius:9px}
+
+
+/* v2.4 dynamic source-based status */
+.status-info{
+  margin:0 0 10px;padding:11px;border-radius:14px;
+  background:#fff;border:1px solid #e3ebf1
+}
+.status-info-title{display:flex;align-items:center;gap:7px}
+.status-dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.status-source{margin-left:auto;font-size:10px;padding:4px 7px;border-radius:999px;background:#f0f5f8;color:var(--muted);font-weight:800}
+.status-confidence{font-size:10px;color:var(--muted);margin-top:6px}
+.status-reason{font-size:10px;line-height:1.35;margin-top:5px}
+.forecast-warning{margin-top:7px;background:#fff3cc;border-radius:8px;padding:6px 8px;font-size:9px;font-weight:700}
+.prototype-status-test{margin-top:14px;border-top:1px solid #e7edf2;padding-top:12px}
+.prototype-status-test b,.prototype-status-test small{display:block}
+.prototype-status-test small{font-size:9px;color:var(--muted);margin:3px 0 8px}
+.prototype-status-test select{width:100%;padding:9px;margin:4px 0;border:1px solid #dbe4eb;border-radius:10px;background:#fff}
+.prototype-status-test button{width:100%;margin-top:6px;border:0;border-radius:10px;padding:10px;background:#e8f3fb;color:#176b9f;font-weight:900}
