@@ -926,6 +926,7 @@ function renderReportPanel(){
      <select id="reportType" onchange="renderReportTypeFields()">
        <option value="conditions">🌊 Условия на плажа</option>
        <option value="lifeguard">🛟 Спасителен пост / неохраняема зона</option>
+       <option value="newBeach">🏖️ Предложи нов плаж</option>
      </select>
      <div id="reportTypeFields"></div>
      <button class="submit-report" onclick="submitPrototypeReport()">Изпрати сигнал</button>
@@ -955,6 +956,30 @@ function renderReportTypeFields(){
  const type=document.getElementById('reportType')?.value||'conditions';
  const box=document.getElementById('reportTypeFields');
  if(!box) return;
+
+ if(type==='newBeach'){
+   box.innerHTML=`
+     <div class="new-beach-card">
+       <label>Име на плажа</label>
+       <input id="newBeachName" class="text-input" placeholder="Напр. Малък плаж до..." maxlength="80">
+
+       <label>Локация</label>
+       <div class="gps-evidence" id="newBeachGpsStatus">
+         ${userPos
+           ? `📍 Ще използваме текущия GPS: ${userPos.lat.toFixed(5)}, ${userPos.lng.toFixed(5)}`
+           : '📍 Първо натисни GPS бутона на картата, за да запишем реалната ти позиция.'}
+       </div>
+
+       <label>Допълнителна информация</label>
+       <textarea id="newBeachComment" class="text-area" placeholder="Как се стига, ориентир, дали е пясъчен/каменист и т.н." maxlength="300"></textarea>
+
+       <div class="proposal-note">
+         Предложението няма да се появи веднага като официален плаж. Ще чака потвърждения от други потребители и/или проверка.
+       </div>
+     </div>`;
+   return;
+ }
+
  if(type==='lifeguard'){
    box.innerHTML=`
      <label>Какво искаш да коригираш?</label>
@@ -964,29 +989,38 @@ function renderReportTypeFields(){
        <button onclick="choose(this)">↔️ Постът е преместен</button>
        <button onclick="choose(this)">⚠️ Това е неохраняема зона</button>
      </div>
-     <div class="gps-evidence">📍 В реалната версия към сигнала ще записваме GPS позицията на подателя и по желание снимка.</div>
-     <div class="prototype-status-test">
-       <b>Тест на приоритета на статуса</b>
-       <small>Само за прототипа — симулира по-надежден източник.</small>
-       <select id="prototypeSource">
-         <option value="lifeguard">🛟 Спасител</option>
-         <option value="camera">📷 Камера</option>
-         <option value="community">👥 Community</option>
-       </select>
-       <select id="prototypeFlag">
-         <option value="green">🟢 Зелен</option>
-         <option value="yellow">🟡 Жълт</option>
-         <option value="red">🔴 Червен</option>
-       </select>
-       <button type="button" onclick="applyPrototypeStatusSource()">Приложи тестов статус</button>
-     </div>`;
- }else{
-   box.innerHTML=`
-     <label>🚩 Флаг</label><div class="choice-row"><button onclick="choose(this)">🟢 Зелен</button><button onclick="choose(this)">🟡 Жълт</button><button onclick="choose(this)">🔴 Червен</button></div>
-     <label>🪼 Медузи</label><div class="choice-row"><button onclick="choose(this)">Няма</button><button onclick="choose(this)">Малко</button><button onclick="choose(this)">Много</button></div>
-     <label>🌿 Водорасли</label><div class="choice-row"><button onclick="choose(this)">Няма</button><button onclick="choose(this)">Малко</button><button onclick="choose(this)">Много</button></div>
-     <label>👥 Натовареност</label><div class="choice-row"><button onclick="choose(this)">Спокойно</button><button onclick="choose(this)">Средно</button><button onclick="choose(this)">Претъпкано</button></div>`;
+     <div class="gps-evidence">📍 Към корекцията се използва GPS позицията на подателя, когато е налична.</div>`;
+   return;
  }
+
+ box.innerHTML=`
+   <label>🚩 Флаг</label>
+   <div class="choice-row" data-field="flag">
+     <button onclick="choose(this)">🟢 Зелен</button>
+     <button onclick="choose(this)">🟡 Жълт</button>
+     <button onclick="choose(this)">🔴 Червен</button>
+   </div>
+
+   <label>🪼 Медузи</label>
+   <div class="choice-row" data-field="jellyfish">
+     <button onclick="choose(this)">Няма</button>
+     <button onclick="choose(this)">Малко</button>
+     <button onclick="choose(this)">Много</button>
+   </div>
+
+   <label>🌿 Водорасли</label>
+   <div class="choice-row" data-field="seaweed">
+     <button onclick="choose(this)">Няма</button>
+     <button onclick="choose(this)">Малко</button>
+     <button onclick="choose(this)">Много</button>
+   </div>
+
+   <label>👥 Натовареност</label>
+   <div class="choice-row" data-field="crowd">
+     <button onclick="choose(this)">Спокойно</button>
+     <button onclick="choose(this)">Средно</button>
+     <button onclick="choose(this)">Претъпкано</button>
+   </div>`;
 }
 
 function choose(btn){

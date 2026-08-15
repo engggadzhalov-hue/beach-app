@@ -10,6 +10,15 @@ function beachFirebaseId(b){
     .replace(/^-+|-+$/g,'');
 }
 
+function safeIdPart(s){
+  return String(s||'')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-zа-я0-9]+/gi,'-')
+    .replace(/^-+|-+$/g,'')
+    .slice(0,80);
+}
+
 function beachFirebaseBadge(text, ok=true){
   let el=document.getElementById('firebaseStatusBadge');
   if(!el){
@@ -35,7 +44,7 @@ async function initBeachFirebase(){
 
     beachFirebaseDb.collection('reports')
       .orderBy('createdAt','desc')
-      .limit(200)
+      .limit(300)
       .onSnapshot(snap=>{
         beachReports=snap.docs.map(d=>({id:d.id,...d.data()}));
         applyRealtimeCommunityStatuses();
@@ -66,6 +75,8 @@ function applyRealtimeCommunityStatuses(){
 
   beaches.forEach(b=>{
     const id=beachFirebaseId(b);
+
+    // One document per user/beach/type means each UID has exactly one current vote.
     const votes=recent.filter(r=>r.beachId===id);
     if(votes.length<3) return;
 
@@ -85,20 +96,86 @@ function applyRealtimeCommunityStatuses(){
 }
 
 function chosenReportData(){
-  const buttons=[...document.querySelectorAll('#reportTypeFields .chosen')];
   const out={};
 
-  buttons.forEach(btn=>{
-    const t=btn.textContent.toLowerCase();
-    if(t.includes('зелен')) out.flag='green';
-    else if(t.includes('жълт')) out.flag='yellow';
-    else if(t.includes('червен')) out.flag='red';
-    else if(t.includes('спокойно')) out.crowd='quiet';
-    else if(t.includes('средно')) out.crowd='medium';
-    else if(t.includes('претъпкано')) out.crowd='packed';
+  document.querySelectorAll('#reportTypeFields .choice-row').forEach(row=>{
+    const chosen=row.querySelector('.chosen');
+    if(!chosen) return;
+
+    const field=row.dataset.field;
+    const text=chosen.textContent.toLowerCase();
+
+    if(field==='flag'){
+      if(text.includes('зелен')) out.flag='green';
+      if(text.includes('жълт')) out.flag='yellow';
+      if(text.includes('червен')) out.flag='red';
+    }
+
+    if(field==='jellyfish'){
+      if(text.includes('няма')) out.jellyfish='none';
+      if(text.includes('малко')) out.jellyfish='low';
+      if(text.includes('много')) out.jellyfish='high';
+    }
+
+    if(field==='seaweed'){
+      if(text.includes('няма')) out.seaweed='none';
+      if(text.includes('малко')) out.seaweed='low';
+      if(text.includes('много')) out.seaweed='high';
+    }
+
+    if(field==='crowd'){
+      if(text.includes('спокойно')) out.crowd='quiet';
+      if(text.includes('средно')) out.crowd='medium';
+      if(text.includes('претъпкано')) out.crowd='packed';
+    }
   });
 
   return out;
+}
+
+function activeReportDocId(userId, beachId, type){
+  // Important anti-spam rule:
+  // One user has ONE current report document for each beach + report type.
+  // A new submission updates the old document instead of adding another vote.
+  return `${safeIdPart(userId)}__${safeIdPart(beachId)}__${safeIdPart(type)}`;
+}
+
+function roundedLocationKey(lat,lng){
+  // ~100m-ish grid. Same user proposing the same place again updates the proposal.
+  return `${Number(lat).toFixed(3)}_${Number(lng).toFixed(3)}`.replace(/\./g,'p').replace(/-/g,'m');
+}
+
+async function submitNewBeachProposal(msg){
+  const name=(document.getElementById('newBeachName')?.value||'').trim();
+  const comment=(document.getElementById('newBeachComment')?.value||'').trim();
+
+  if(name.length<3){
+    throw new Error('Въведи име на плажа.');
+  }
+  if(typeof userPos==='undefined' || !userPos?.lat || !userPos?.lng){
+    throw new Error('За нов плаж е необходим GPS. Върни се на картата и натисни 📍.');
+  }
+
+  const proposalBeachId=`proposal-${roundedLocationKey(userPos.lat,userPos.lng)}`;
+  const docId=activeReportDocId(beachFirebaseUser.uid,proposalBeachId,'newBeach');
+
+  const doc={
+    userId:beachFirebaseUser.uid,
+    beachId:proposalBeachId,
+    beachName:name,
+    type:'newBeach',
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+    latitude:userPos.lat,
+    longitude:userPos.lng
+  };
+
+  if(comment) doc.comment=comment;
+
+  await beachFirebaseDb.collection('reports').doc(docId).set(doc,{merge:true});
+
+  if(msg){
+    msg.textContent='✅ Предложението е записано. То няма да стане официален маркер автоматично — ще чака потвърждение/проверка.';
+  }
 }
 
 window.submitPrototypeReport = async function(){
@@ -112,19 +189,30 @@ window.submitPrototypeReport = async function(){
   try{
     if(msg) msg.textContent='Изпращане…';
 
+    const type=document.getElementById('reportType')?.value || 'conditions';
+
+    if(type==='newBeach'){
+      await submitNewBeachProposal(msg);
+      return;
+    }
+
     const idx=Number(document.getElementById('reportBeachSelect')?.value);
     const b=beaches[idx];
-    const type=document.getElementById('reportType')?.value || 'conditions';
-    const data=chosenReportData();
+    if(!b) throw new Error('Няма избран плаж.');
 
+    const data=chosenReportData();
     let lifeguardCorrection;
+
     if(type==='lifeguard'){
       lifeguardCorrection=document.querySelector('#reportTypeFields .choice-row .chosen')?.textContent.trim();
     }
 
+    const beachId=beachFirebaseId(b);
+    const docId=activeReportDocId(beachFirebaseUser.uid,beachId,type);
+
     const doc={
       userId:beachFirebaseUser.uid,
-      beachId:beachFirebaseId(b),
+      beachId,
       beachName:b.name,
       type,
       createdAt:firebase.firestore.FieldValue.serverTimestamp(),
@@ -133,15 +221,22 @@ window.submitPrototypeReport = async function(){
     };
 
     if(data.flag) doc.flag=data.flag;
+    if(data.jellyfish) doc.jellyfish=data.jellyfish;
+    if(data.seaweed) doc.seaweed=data.seaweed;
     if(data.crowd) doc.crowd=data.crowd;
     if(lifeguardCorrection) doc.lifeguardCorrection=lifeguardCorrection;
 
-    await beachFirebaseDb.collection('reports').add(doc);
+    // SET, not ADD:
+    // repeated submissions by the same user update the same document.
+    await beachFirebaseDb.collection('reports').doc(docId).set(doc,{merge:true});
 
-    if(msg) msg.textContent='✅ Сигналът е записан и се изпраща към другите устройства в реално време.';
+    if(msg){
+      msg.textContent='✅ Сигналът е записан. Ако подадеш нов сигнал за същия плаж и тип, ще актуализира този — няма да се броиш два пъти.';
+    }
+
   }catch(e){
     console.error(e);
-    if(msg) msg.textContent='❌ Грешка при запис. Провери Firestore rules и Firebase конфигурацията.';
+    if(msg) msg.textContent=`❌ ${e.message || 'Грешка при запис.'}`;
   }
 };
 

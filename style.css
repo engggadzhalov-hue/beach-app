@@ -185,3 +185,27 @@ nav button.active-nav{color:var(--blue);font-weight:800}
 
 .firebase-status-badge{margin-left:auto;margin-right:8px;padding:4px 7px;border-radius:999px;background:#eef8f2;color:#26764e;font-size:9px;font-weight:900;white-space:nowrap}
 .firebase-status-badge.offline{background:#fff2df;color:#9a5a00}
+
+
+/* v2.7 anti-spam + new beach proposal */
+.text-input,.text-area{
+  width:100%;
+  border:1px solid #dbe5ec;
+  border-radius:12px;
+  background:#fff;
+  padding:11px 12px;
+  font:inherit;
+  color:var(--ink);
+  outline:none;
+}
+.text-area{min-height:90px;resize:vertical}
+.new-beach-card label{display:block;font-weight:800;margin:14px 0 7px}
+.proposal-note{
+  margin-top:12px;
+  padding:10px;
+  border-radius:11px;
+  background:#fff5d8;
+  color:#6f5a1c;
+  font-size:10px;
+  line-height:1.4;
+}
