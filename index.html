@@ -19,8 +19,8 @@
   .phone{max-width:430px;min-height:100vh;margin:0 auto;background:var(--bg);position:relative;overflow:hidden;box-shadow:0 0 30px rgba(0,0,0,.12)}
   .topbar{height:64px;padding:18px 18px 10px;display:flex;align-items:center;justify-content:space-between;background:white;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:1000}
   .brand{font-size:21px;font-weight:800}.subbrand{font-size:11px;color:var(--muted);font-weight:600}
-  .screen{display:none;padding-bottom:92px}.screen.active{display:block}
-  #map{height:430px;width:100%;z-index:1}
+  .screen{display:none;padding-bottom:92px}.screen.active{display:block}#mapScreen.active{min-height:calc(100dvh - 106px)}
+  #map{height:calc(100dvh - 180px);min-height:460px;width:100%;z-index:1}
   .map-wrap{position:relative}
   .search{position:absolute;top:14px;left:14px;right:14px;z-index:500;background:white;border-radius:22px;padding:12px 15px;box-shadow:0 5px 18px rgba(0,0,0,.16);display:flex;align-items:center;gap:8px}
   .search input{border:0;outline:0;width:100%;font-size:14px;background:transparent}
@@ -78,7 +78,7 @@
         <span>🔎</span>
         <input id="searchInput" placeholder="Търси плаж..." oninput="filterBeaches()" />
       </div>
-      <div class="gps-fab" onclick="locateUser()" title="Моето местоположение">📍</div>
+      <div class="gps-fab" onclick="recenterOrLocate()" title="Моето местоположение">📍</div>
     </div>
 
     <div class="section">
@@ -275,6 +275,16 @@ function haversine(lat1,lon1,lat2,lon2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
+
+function recenterOrLocate(){
+  if(userLat!==null){
+    refreshMapSize(false);
+    setTimeout(()=>map.setView([userLat,userLng],14,{animate:true}),120);
+  } else {
+    locateUser();
+  }
+}
+
 function locateUser(){
   if(!navigator.geolocation){
     toast("GPS не се поддържа от този браузър.");
@@ -297,7 +307,8 @@ function locateUser(){
         fillOpacity:.08
       }).addTo(map);
 
-      map.setView([userLat,userLng],13);
+      refreshMapSize(false);
+      setTimeout(()=>map.setView([userLat,userLng],14,{animate:true}),180);
       document.getElementById("locationStatus").textContent=
         `📍 GPS активен · точност около ${Math.round(pos.coords.accuracy)} m`;
       renderList(document.getElementById("searchInput").value);
@@ -315,11 +326,24 @@ function locateUser(){
   );
 }
 
+
+function refreshMapSize(centerOnUser=false){
+  requestAnimationFrame(()=>{
+    setTimeout(()=>{
+      map.invalidateSize(true);
+      if(centerOnUser && userLat!==null){
+        map.setView([userLat,userLng],14,{animate:false});
+      }
+    },120);
+    setTimeout(()=>map.invalidateSize(true),420);
+  });
+}
+
 function setScreen(id){
   document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
   document.getElementById(id).classList.add("active");
   window.scrollTo(0,0);
-  if(id==="mapScreen") setTimeout(()=>map.invalidateSize(),150);
+  if(id==="mapScreen") refreshMapSize(false);
 }
 
 function openBeach(id){
@@ -373,7 +397,9 @@ function submitReport(){
 }
 
 renderList();
-setTimeout(()=>map.invalidateSize(),200);
+refreshMapSize(false);
+window.addEventListener('resize',()=>refreshMapSize(false));
+window.addEventListener('orientationchange',()=>setTimeout(()=>refreshMapSize(false),300));
 </script>
 </body>
 </html>
